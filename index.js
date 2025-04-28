@@ -1,36 +1,36 @@
 try {
   // --- Game Tuning Variables ---
   const INITIAL_MAX_HEALTH = 100;
-  const HEALTH_REGEN_RATE = 0.04; // Base Rate
+  const HEALTH_REGEN_RATE = 0.04;
   const REGEN_DELAY_AFTER_HIT = 120;
-  const BASE_DAMAGE_MULTIPLIER = 0.15; // Wall damage multiplier
+  const BASE_DAMAGE_MULTIPLIER = 0.15;
   const POWERUP_SPAWN_CHANCE = 0.018;
   const POWERUP_HEALTH_CHANCE = 0.3;
   const POWERUP_SLOWMO_CHANCE = 0.15;
-  const POWERUP_MAX_HEALTH_CHANCE = 0.1; // Now just a flat heal pickup
+  const POWERUP_MAX_HEALTH_CHANCE = 0.1;
   const POWERUP_BOOST_FUEL_CHANCE = 0.15;
-  const POWERUP_MAX_WEAPON_ENERGY_CHANCE = 0.15; // Now just flat energy pickup
+  const POWERUP_MAX_WEAPON_ENERGY_CHANCE = 0.15;
   const POWERUP_MISSILE_AMMO_CHANCE = 0.15;
-  const MAX_WEAPON_ENERGY_INCREASE_AMOUNT = 20; // Flat amount per powerup pickup
+  const MAX_WEAPON_ENERGY_INCREASE_AMOUNT = 20;
   const STAGE_SCORE_THRESHOLD = 300;
   const STAGE_HEAL_AMOUNT = 20;
-  const INITIAL_MAX_BOOSTER_FUEL = 100; // Base Max
+  const INITIAL_MAX_BOOSTER_FUEL = 100;
   const BOOSTER_COST_PER_FRAME = 1.0;
   const BOOSTER_REGEN_RATE = 0.3;
   const BOOSTER_REGEN_DELAY = 90;
   const BOOSTER_SPEED_MULTIPLIER = 1.8;
-  const BOOST_PICKUP_AMOUNT = 40; // Flat amount per powerup pickup
-  const INITIAL_MAX_WEAPON_ENERGY = 100; // Base Max
-  const WEAPON_ENERGY_REGEN_RATE = 0.5; // Base Rate
+  const BOOST_PICKUP_AMOUNT = 40;
+  const INITIAL_MAX_WEAPON_ENERGY = 100;
+  const WEAPON_ENERGY_REGEN_RATE = 0.5;
   const WEAPON_ENERGY_REGEN_DELAY = 60;
   const LASER_CANNON_COST = 15;
-  const LASER_CANNON_DAMAGE = 25; // Base Damage
+  const LASER_CANNON_DAMAGE = 25;
   const LASER_CANNON_SPEED = 8;
-  const INITIAL_MISSILE_AMMO = 3; // Base Max
-  const MAX_MISSILE_AMMO_CAP = 20; // Hard cap regardless of upgrades
+  const INITIAL_MISSILE_AMMO = 3;
+  const MAX_MISSILE_AMMO_CAP = 20;
   const MISSILE_PICKUP_AMOUNT = 2;
   const MISSILE_FIRE_COOLDOWN = 45;
-  const MISSILE_DAMAGE = 75; // Base Damage
+  const MISSILE_DAMAGE = 75;
   const MISSILE_SPEED = 5.0;
   const MISSILE_TURN_RATE = 0.08;
   const MISSILE_MAX_STEER_FORCE = 0.3;
@@ -47,13 +47,13 @@ try {
   const ENEMY_PLAYER_COLLISION_DAMAGE = 30;
   const ENEMY_KILL_SCORE_LASER = 20;
   const ENEMY_KILL_SCORE_PULLER = 30;
-  const UPGRADE_POINT_CONVERSION_RATE = 0.5; // Score * Rate = Points Earned
-  const MAX_STREAK_TIME = 240; // Max time between kills for streak (4 seconds at 60fps)
-  const STREAK_MULTIPLIER_INCREMENT = 0.5; // Multiplier increases by this much per kill in streak
-  const MAX_STREAK_MULTIPLIER = 5.0; // Cap multiplier
-  const STREAK_NOTIFICATION_DURATION = 90; // How long streak text stays on screen
-  const STREAK_PULSE_SPEED_FACTOR = 0.1; // How fast tunnel brightness pulses with streak
-  const STREAK_PULSE_AMP_FACTOR = 5; // How much tunnel brightness pulses with streak
+  const UPGRADE_POINT_CONVERSION_RATE = 0.5;
+  const MAX_STREAK_TIME = 120; // <<< Reduced Streak Timer (2 seconds) >>>
+  const STREAK_MULTIPLIER_INCREMENT = 0.5;
+  const MAX_STREAK_MULTIPLIER = 5.0;
+  const STREAK_NOTIFICATION_DURATION = 90;
+  const STREAK_PULSE_SPEED_FACTOR = 0.1;
+  const STREAK_PULSE_AMP_FACTOR = 5;
 
   // --- Global Variables ---
   let player;
@@ -88,8 +88,8 @@ try {
   // --- Streak Variables ---
   let streakCount = 0;
   let streakMultiplier = 1.0;
-  let streakTimer = 0; // Time remaining to continue streak
-  let streakNotificationTimer = 0; // Display timer for streak text
+  let streakTimer = 0;
+  let streakNotificationTimer = 0;
   let streakNotificationText = "";
   // --- Upgrade System Data ---
   let upgradePoints = 0;
@@ -164,7 +164,7 @@ try {
   };
   const upgradeKeys = Object.keys(upgrades);
 
-  // --- Player Object ---
+  // --- Player Object --- (No changes needed here for these requests)
   class Player {
     constructor() {
       this.x = width / 2;
@@ -189,7 +189,6 @@ try {
       this.damageColor = color(0, 90, 100);
       this.boostColor = color(200, 80, 100);
     }
-
     resetStatsBasedOnUpgrades() {
       this.maxHealth = INITIAL_MAX_HEALTH;
       this.maxWeaponEnergy =
@@ -225,26 +224,20 @@ try {
       this.boosterRegenDelayDuration = BOOSTER_REGEN_DELAY;
       this.weaponEnergyRegenDelayDuration = WEAPON_ENERGY_REGEN_DELAY;
     }
-
     update() {
       this.isBoosting = false;
       this.externalForceX = 0;
-      if (enemies && Array.isArray(enemies)) {
+      if (enemies) {
         for (let enemy of enemies) {
-          if (
-            enemy &&
-            enemy.type === "PULLER" &&
-            typeof enemy.calculatePull === "function"
-          ) {
+          if (enemy && enemy.type === "PULLER" && enemy.calculatePull) {
             let pull = enemy.calculatePull(this);
             if (!isNaN(pull)) this.externalForceX += pull;
           }
         }
       }
-      let moveLeft = keyIsDown(LEFT_ARROW) || keyIsDown(65); // A
-      let moveRight = keyIsDown(RIGHT_ARROW) || keyIsDown(68); // D
+      let moveLeft = keyIsDown(LEFT_ARROW) || keyIsDown(65);
+      let moveRight = keyIsDown(RIGHT_ARROW) || keyIsDown(68);
       let boostKey = keyIsDown(SHIFT);
-
       if (boostKey && this.boosterFuel > 0) {
         this.isBoosting = true;
         this.boosterFuel = max(0, this.boosterFuel - this.boosterCost);
@@ -258,7 +251,6 @@ try {
             this.boosterFuel + BOOSTER_REGEN_RATE
           );
       }
-
       let currentFrameMoveSpeed = this.baseMoveSpeed;
       if (this.isBoosting) currentFrameMoveSpeed *= this.boosterMultiplier;
       let moveIntentX = 0;
@@ -267,8 +259,6 @@ try {
       let deltaX = moveIntentX + this.externalForceX;
       if (!isNaN(deltaX)) this.x += deltaX;
       this.x = constrain(this.x, this.width / 2, width - this.width / 2);
-
-      // Regeneration
       if (this.regenDelayTimer > 0) this.regenDelayTimer--;
       else if (this.health < this.maxHealth && gameState === "PLAYING")
         this.health = min(this.health + this.healthRegenRate, this.maxHealth);
@@ -279,8 +269,6 @@ try {
           this.weaponEnergy + this.weaponEnergyRegenRate,
           this.maxWeaponEnergy
         );
-
-      // Cooldowns & Flashes
       if (this.missileFireTimer > 0) this.missileFireTimer--;
       if (this.damageFlashTimer > 0) this.damageFlashTimer--;
       if (healthPickupFlashTimer > 0) healthPickupFlashTimer--;
@@ -289,7 +277,6 @@ try {
         maxWeaponEnergyPickupFlashTimer--;
       if (missileAmmoPickupFlashTimer > 0) missileAmmoPickupFlashTimer--;
     }
-
     draw(forceX = this.x, forceY = this.y) {
       let currentColor = this.baseColor;
       if (this.damageFlashTimer > 0)
@@ -304,31 +291,23 @@ try {
           this.boostColor,
           0.7 + sin(frameCount * 0.5) * 0.3
         );
-
       push();
       translate(forceX, forceY);
-
-      // Base Ship Body
       fill(currentColor);
       noStroke();
       rectMode(CENTER);
       rect(0, 0, this.width, this.height);
-
-      // --- Visual Upgrades ---
       let wingColor = lerpColor(currentColor, color(0, 0, 80), 0.3);
       let cannonColor = lerpColor(currentColor, color(0, 0, 60), 0.5);
       let glowColor = lerpColor(currentColor, color(60, 80, 100), 0.4);
       let wingWidth = this.width * 0.4;
-      let wingHeight = this.height * 0.8; // Defined here
-
+      let wingHeight = this.height * 0.8;
       if (this.laserSpreadLevel > 0) {
-        // Level 1+
         fill(wingColor);
         rect(-this.width * 0.6, 0, wingWidth, wingHeight, 2);
         rect(this.width * 0.6, 0, wingWidth, wingHeight, 2);
       }
       if (this.laserSpreadLevel > 1) {
-        // Level 2+
         fill(wingColor);
         triangle(
           -this.width * 0.6,
@@ -348,7 +327,6 @@ try {
         );
       }
       if (this.laserSpreadLevel > 2) {
-        // Level 3+
         fill(cannonColor);
         ellipse(
           -this.width * 0.9,
@@ -364,7 +342,6 @@ try {
         );
       }
       if (this.laserSpreadLevel > 3) {
-        // Level 4 (Max)
         fill(glowColor);
         ellipse(0, -this.height * 0.6, this.width * 0.2, this.height * 0.2);
         ellipse(
@@ -380,8 +357,6 @@ try {
           this.height * 0.15
         );
       }
-      // --- End Visual Upgrades ---
-
       if (this.isBoosting && gameState === "PLAYING") {
         fill(this.boostColor, 50 + random(-10, 10));
         noStroke();
@@ -395,7 +370,6 @@ try {
       }
       pop();
     }
-
     fireLaser() {
       if (this.weaponEnergy >= this.weaponCost) {
         this.weaponEnergy -= this.weaponCost;
@@ -404,7 +378,7 @@ try {
         let spreadAngle = PI / 24;
         let startAngle =
           numLasers === 1 ? 0 : (-spreadAngle * (numLasers - 1)) / 2;
-        if (playerProjectiles && Array.isArray(playerProjectiles)) {
+        if (playerProjectiles) {
           for (let i = 0; i < numLasers; i++) {
             let angle = startAngle + i * spreadAngle;
             let vx = sin(angle) * this.weaponProjectileSpeed;
@@ -423,12 +397,11 @@ try {
         }
       }
     }
-
     fireMissile() {
       if (this.missileAmmo > 0 && this.missileFireTimer <= 0) {
         this.missileAmmo--;
         this.missileFireTimer = this.missileFireCooldown;
-        if (playerProjectiles && Array.isArray(playerProjectiles)) {
+        if (playerProjectiles) {
           playerProjectiles.push(
             new Projectile(
               this.x,
@@ -442,19 +415,12 @@ try {
         }
       }
     }
-
     calculateWallDamage(tunnelSegments) {
       let collisionSegment = null;
       let minDist = Infinity;
-      if (!tunnelSegments || !Array.isArray(tunnelSegments)) return 0;
+      if (!tunnelSegments) return 0;
       for (let seg of tunnelSegments) {
-        if (
-          !seg ||
-          typeof seg.y === "undefined" ||
-          typeof seg.x === "undefined" ||
-          typeof seg.w === "undefined"
-        )
-          continue;
+        if (!seg || typeof seg.y === "undefined") continue;
         let distY = abs(seg.y - this.y);
         if (distY < this.height * 2) {
           let tunnelL = seg.x - seg.w / 2;
@@ -481,19 +447,12 @@ try {
         let overlap = 0;
         if (playerL < tunnelL) overlap = tunnelL - playerL;
         else if (playerR > tunnelR) overlap = playerR - tunnelR;
-        let speedFactor =
-          typeof currentSpeed === "number" &&
-          currentSpeed > 0 &&
-          typeof baseSpeed === "number" &&
-          baseSpeed > 0
-            ? currentSpeed / baseSpeed
-            : 1;
+        let speedFactor = currentSpeed / baseSpeed;
         if (overlap > 0)
           return max(0.1, overlap * BASE_DAMAGE_MULTIPLIER * speedFactor);
       }
       return 0;
     }
-
     takeDamage(amount, source = null) {
       if (amount <= 0 || isNaN(amount)) return;
       this.health -= amount;
@@ -502,11 +461,10 @@ try {
       this.health = max(0, this.health);
       if (this.health <= 0 && gameState === "PLAYING") {
         lastScore = score;
-        resetStreak(); // Reset streak on death
+        resetStreak();
         gameState = "GAME_OVER";
       }
     }
-
     heal(amount) {
       if (!isNaN(amount) && amount > 0) {
         this.health = min(this.health + amount, this.maxHealth);
@@ -540,18 +498,11 @@ try {
         this.heal(amount);
       }
     }
-
     checkPowerUpCollision(powerUpsToCheck) {
-      if (!powerUpsToCheck || !Array.isArray(powerUpsToCheck)) return;
+      if (!powerUpsToCheck) return;
       for (let i = powerUpsToCheck.length - 1; i >= 0; i--) {
         let pu = powerUpsToCheck[i];
-        if (
-          !pu ||
-          typeof pu.x === "undefined" ||
-          typeof pu.y === "undefined" ||
-          typeof pu.size === "undefined"
-        )
-          continue;
+        if (!pu || typeof pu.x === "undefined") continue;
         let d = dist(this.x, this.y, pu.x, pu.y);
         if (d < (this.width / 2 + pu.size / 2) * 1.1) {
           let originalIndex = powerUps.indexOf(pu);
@@ -562,20 +513,11 @@ try {
         }
       }
     }
-
     checkEnemyCollision(enemiesToCheck) {
-      if (!enemiesToCheck || !Array.isArray(enemiesToCheck)) return;
+      if (!enemiesToCheck) return;
       for (let i = enemiesToCheck.length - 1; i >= 0; i--) {
         let enemy = enemiesToCheck[i];
-        if (
-          !enemy ||
-          typeof enemy.x === "undefined" ||
-          typeof enemy.y === "undefined" ||
-          typeof enemy.size === "undefined" ||
-          typeof enemy.takeDamage !== "function" ||
-          typeof enemy.isAlive !== "function"
-        )
-          continue;
+        if (!enemy || typeof enemy.x === "undefined") continue;
         let currentHalfWidth =
           (this.width / 2) * (1 + this.laserSpreadLevel * 0.3);
         let playerL = this.x - currentHalfWidth;
@@ -634,7 +576,7 @@ try {
     }
   }
 
-  // --- Projectile Object ---
+  // --- Projectile Object --- (No changes needed)
   class Projectile {
     constructor(x, y, vx, vy, type, damage) {
       this.x = x;
@@ -657,10 +599,10 @@ try {
         this.targetEnemy = null;
         this.maxSpeed = MISSILE_SPEED;
         this.maxForce = MISSILE_MAX_STEER_FORCE;
-        let initialMag = sqrt(this.vx * this.vx + this.vy * this.vy);
-        if (initialMag > 0) {
-          this.vx = (this.vx / initialMag) * this.maxSpeed;
-          this.vy = (this.vy / initialMag) * this.maxSpeed;
+        let mag = sqrt(vx * vx + vy * vy);
+        if (mag > 0) {
+          this.vx = (vx / mag) * this.maxSpeed;
+          this.vy = (vy / mag) * this.maxSpeed;
         } else {
           this.vy = -this.maxSpeed;
         }
@@ -669,14 +611,9 @@ try {
     findTarget() {
       let closestDistSq = Infinity;
       let closestEnemy = null;
-      if (enemies && Array.isArray(enemies)) {
+      if (enemies) {
         for (let enemy of enemies) {
-          if (
-            enemy &&
-            enemy.isAlive() &&
-            typeof enemy.x !== "undefined" &&
-            typeof enemy.y !== "undefined"
-          ) {
+          if (enemy && enemy.isAlive() && enemy.x) {
             let dSq = pow(enemy.x - this.x, 2) + pow(enemy.y - this.y, 2);
             if (dSq < closestDistSq) {
               closestDistSq = dSq;
@@ -716,11 +653,7 @@ try {
           frameCount % 15 === 0
         )
           this.findTarget();
-        if (
-          this.targetEnemy &&
-          typeof this.targetEnemy.x !== "undefined" &&
-          typeof this.targetEnemy.y !== "undefined"
-        ) {
+        if (this.targetEnemy && this.targetEnemy.x) {
           this.applyForce(
             this.seek(createVector(this.targetEnemy.x, this.targetEnemy.y))
           );
@@ -735,9 +668,7 @@ try {
         strokeWeight(2);
         stroke(25, 90, 90, 50);
         beginShape();
-        for (let v of this.trail) {
-          vertex(v.x, v.y);
-        }
+        for (let v of this.trail) vertex(v.x, v.y);
         vertex(this.x, this.y);
         endShape();
         push();
@@ -784,12 +715,7 @@ try {
       );
     }
     checkCollision(target) {
-      if (
-        !target ||
-        typeof target.x === "undefined" ||
-        typeof target.y === "undefined"
-      )
-        return false;
+      if (!target || typeof target.x === "undefined") return false;
       let targetSize = 0;
       if (target instanceof Player)
         targetSize = max(target.width, target.height) / 2;
@@ -800,7 +726,7 @@ try {
     }
   }
 
-  // --- Enemy Object ---
+  // --- Enemy Object --- (No changes needed)
   class Enemy {
     constructor(x, y, type) {
       this.x = x;
@@ -947,7 +873,7 @@ try {
     }
   }
 
-  // --- PowerUp Object ---
+  // --- PowerUp Object --- (No changes needed)
   class PowerUp {
     constructor(x, y, type) {
       this.x = x;
@@ -1077,7 +1003,7 @@ try {
     enemies = [];
     playerProjectiles = [];
     enemyProjectiles = [];
-    resetStreak();
+    resetStreak(); // Reset streak on new game
   }
 
   // --- Initialize Tunnel ---
@@ -1163,22 +1089,14 @@ try {
     pulseBrightness = constrain(pulseBrightness, 70, 100);
     let finalSaturation = slowMoActive ? baseSaturation * 0.7 : pulseSaturation;
     let finalBrightness = slowMoActive ? baseBrightness * 0.8 : pulseBrightness;
-
     strokeWeight(thickness);
     noFill();
     let hue = (frameCount * hueSpeed) % 360;
-
-    if (!tunnel || !Array.isArray(tunnel)) return;
+    if (!tunnel) return;
     for (let i = 0; i < tunnel.length - 1; i++) {
       let seg1 = tunnel[i],
         seg2 = tunnel[i + 1];
-      if (
-        !seg1 ||
-        !seg2 ||
-        typeof seg1.x === "undefined" ||
-        typeof seg2.x === "undefined"
-      )
-        continue;
+      if (!seg1 || !seg2 || typeof seg1.x === "undefined") continue;
       let tunnelColor = color(
         hue,
         finalSaturation,
@@ -1191,23 +1109,18 @@ try {
     }
   }
 
-  // --- Update World State (Enhanced Streak Logic) ---
+  // --- Update World State (Streak starts at 3 kills) ---
   function updateWorld() {
     if (!player) return;
     let effectiveSpeed = currentSpeed * (slowMoActive ? 0.5 : 1);
     if (slowMoActive && --slowMoTimer <= 0) slowMoActive = false;
-
-    // Update Streak Timer
     if (streakTimer > 0) {
       streakTimer -= slowMoActive ? 0.5 : 1;
-      if (streakTimer <= 0) {
-        resetStreak(); // Call reset when timer expires
-      }
+      if (streakTimer <= 0) resetStreak();
     }
     if (streakNotificationTimer > 0) streakNotificationTimer--;
-
     // Update Tunnel & Score
-    if (tunnel && Array.isArray(tunnel)) {
+    if (tunnel) {
       for (let i = tunnel.length - 1; i >= 0; i--) {
         let seg = tunnel[i];
         if (!seg || typeof seg.y === "undefined") {
@@ -1220,8 +1133,7 @@ try {
           if (gameState === "PLAYING") {
             score++;
             if (score >= nextStageScore) {
-              if (player && typeof player.heal === "function")
-                player.heal(STAGE_HEAL_AMOUNT);
+              if (player) player.heal(STAGE_HEAL_AMOUNT);
               nextStageScore += STAGE_SCORE_THRESHOLD;
             }
           }
@@ -1242,9 +1154,8 @@ try {
           if (pu.y > height + 20) powerUps.splice(i, 1);
         } else powerUps.splice(i, 1);
       });
-
     // Update Enemies & Handle Kills
-    if (enemies && Array.isArray(enemies)) {
+    if (enemies) {
       for (let i = enemies.length - 1; i >= 0; i--) {
         let enemy = enemies[i];
         if (!enemy || typeof enemy.update !== "function") {
@@ -1256,12 +1167,14 @@ try {
           enemies.splice(i, 1);
         } else if (!enemy.isAlive()) {
           streakCount++;
+          // <<< Streak multiplier starts after kill #2 (when streakCount becomes 3) >>>
           streakMultiplier = min(
             MAX_STREAK_MULTIPLIER,
-            1.0 + max(0, streakCount - 1) * STREAK_MULTIPLIER_INCREMENT
+            1.0 + max(0, streakCount - 2) * STREAK_MULTIPLIER_INCREMENT
           );
           streakTimer = MAX_STREAK_TIME;
-          if (streakMultiplier > 1.0) {
+          // <<< Streak notification starts at kill #3 >>>
+          if (streakCount >= 3) {
             streakNotificationText = `Streak x${streakMultiplier.toFixed(1)}!`;
             streakNotificationTimer = STREAK_NOTIFICATION_DURATION;
           }
@@ -1345,7 +1258,8 @@ try {
     streakCount = 0;
     streakMultiplier = 1.0;
     streakTimer = 0;
-    streakNotificationTimer = min(streakNotificationTimer, 15); // Fast fade out
+    streakNotificationTimer = min(streakNotificationTimer, 15); // Fast fade
+    streakNotificationText = ""; // Clear text
   }
 
   // --- Draw All Game Elements ---
@@ -1494,12 +1408,11 @@ try {
       20,
       70
     );
-
     textAlign(RIGHT, TOP);
     text(`POINTS: ${upgradePoints}`, width - 20, 20);
 
-    // Enhanced Streak Display
-    if (streakMultiplier > 1.0 && streakTimer > 0) {
+    // Streak Display (Only show when streak is actually active, i.e., count >= 3)
+    if (streakCount >= 3 && streakTimer > 0) {
       let streakHue = map(streakMultiplier, 1, MAX_STREAK_MULTIPLIER, 60, 0);
       let streakSize = 20 + streakMultiplier * 1.5;
       let pulseBrightness =
@@ -1613,8 +1526,8 @@ try {
     controlY += 25;
     text("Shift          : Boost", controlX, controlY);
     controlY += 25;
-    text("L              : Fire Laser", controlX, controlY);
-    controlY += 25;
+    text("Spacebar       : Fire Laser", controlX, controlY);
+    controlY += 25; // Updated key
     text("M              : Fire Missile", controlX, controlY);
     controlY += 25;
     textAlign(CENTER, CENTER);
@@ -1625,7 +1538,7 @@ try {
       height * 0.8
     );
     textSize(24);
-    text("Press SPACE to Start", width / 2, height * 0.9);
+    text("Press ENTER to Start", width / 2, height * 0.9); // Updated key
   }
 
   // --- Draw Game Over Screen ---
@@ -1650,10 +1563,10 @@ try {
     text("Press 'U' to Upgrade", width / 2, height / 2 + 70);
     textSize(24);
     text(
-      "Press SPACE to Restart (without upgrading)",
+      "Press ENTER to Restart (without upgrading)",
       width / 2,
       height / 2 + 120
-    );
+    ); // Updated key
   }
 
   // --- Draw Upgrade Screen ---
@@ -1724,7 +1637,11 @@ try {
       width / 2,
       height - 70
     );
-    text("Press 'B' to go Back to Start Screen", width / 2, height - 40);
+    text(
+      "Press 'B' to go Back or ENTER to Start New Game",
+      width / 2,
+      height - 40
+    ); // Updated key
   }
 
   // --- Main Draw Loop ---
@@ -1745,27 +1662,27 @@ try {
     }
   }
 
-  // --- Input Handling ---
+  // --- Input Handling (Updated Keys) ---
   function keyPressed() {
     if (gameState === "PLAYING") {
-      if (keyCode === 76) {
+      if (keyCode === 32) {
         if (player) player.fireLaser();
-      } // L
+      } // SPACEBAR for Laser
       else if (keyCode === 77) {
         if (player) player.fireMissile();
-      } // M
+      } // M for Missile
     } else if (gameState === "START") {
-      if (keyCode === 32) {
+      if (keyCode === ENTER) {
         resetGame();
         gameState = "PLAYING";
-      } // SPACE
+      } // ENTER to Start
     } else if (gameState === "GAME_OVER") {
-      if (keyCode === 32) {
+      if (keyCode === ENTER) {
         resetGame();
         gameState = "PLAYING";
-      } // SPACE
+      } // ENTER to Restart
       else if (keyCode === 85) {
-        // U
+        // U to Upgrade
         let pointsEarned = floor(lastScore * UPGRADE_POINT_CONVERSION_RATE);
         upgradePoints += pointsEarned;
         lastScore = 0;
@@ -1774,22 +1691,28 @@ try {
     } else if (gameState === "UPGRADE") {
       if (keyCode === 66) {
         gameState = "START";
-      } // B
-      let upgradeIndex = -1;
-      if (keyCode >= 49 && keyCode <= 56) upgradeIndex = keyCode - 49; // 1-8
-      else if (keyCode >= 97 && keyCode <= 104) upgradeIndex = keyCode - 97; // Numpad 1-8
-      if (upgradeIndex >= 0 && upgradeIndex < upgradeKeys.length) {
-        let key = upgradeKeys[upgradeIndex];
-        let upg = upgrades[key];
-        let maxLevelReached =
-          upg.maxLevel !== undefined && upg.level >= upg.maxLevel;
-        if (!maxLevelReached && upgradePoints >= upg.cost) {
-          upgradePoints -= upg.cost;
-          upg.level++;
-          upg.cost = floor(upg.baseCost * pow(upg.scale, upg.level));
-          // Also update the player immediately if they are around (e.g., for start screen drawing)
-          if (player && player.resetStatsBasedOnUpgrades)
-            player.resetStatsBasedOnUpgrades();
+      } // B to go Back to Start
+      else if (keyCode === ENTER) {
+        resetGame();
+        gameState = "PLAYING";
+      } // ENTER to Start New Game
+      else {
+        // Check number keys for purchasing upgrades
+        let upgradeIndex = -1;
+        if (keyCode >= 49 && keyCode <= 56) upgradeIndex = keyCode - 49; // 1-8
+        else if (keyCode >= 97 && keyCode <= 104) upgradeIndex = keyCode - 97; // Numpad 1-8
+        if (upgradeIndex >= 0 && upgradeIndex < upgradeKeys.length) {
+          let key = upgradeKeys[upgradeIndex];
+          let upg = upgrades[key];
+          let maxLevelReached =
+            upg.maxLevel !== undefined && upg.level >= upg.maxLevel;
+          if (!maxLevelReached && upgradePoints >= upg.cost) {
+            upgradePoints -= upg.cost;
+            upg.level++;
+            upg.cost = floor(upg.baseCost * pow(upg.scale, upg.level));
+            if (player && player.resetStatsBasedOnUpgrades)
+              player.resetStatsBasedOnUpgrades(); // Update player for start screen view
+          }
         }
       }
     }
