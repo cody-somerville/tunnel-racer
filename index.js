@@ -1,44 +1,45 @@
+
 try {
     // --- Game Tuning Variables ---
     const INITIAL_MAX_HEALTH = 100;
-    const HEALTH_REGEN_RATE = 0.04;
+    const HEALTH_REGEN_RATE = 0.04; // Base Rate
     const REGEN_DELAY_AFTER_HIT = 120;
-    const BASE_DAMAGE_MULTIPLIER = 0.15;
+    const BASE_DAMAGE_MULTIPLIER = 0.15; // Wall damage multiplier
     const POWERUP_SPAWN_CHANCE = 0.018;
-    const POWERUP_HEALTH_CHANCE = 0.35;
+    const POWERUP_HEALTH_CHANCE = 0.30;
     const POWERUP_SLOWMO_CHANCE = 0.15;
-    const POWERUP_MAX_HEALTH_CHANCE = 0.10;
+    const POWERUP_MAX_HEALTH_CHANCE = 0.10; // Now just a flat heal pickup
     const POWERUP_BOOST_FUEL_CHANCE = 0.15;
-    const POWERUP_WEAPON_ENERGY_CHANCE = 0.15;
-    const POWERUP_MISSILE_AMMO_CHANCE = 0.10;
+    const POWERUP_MAX_WEAPON_ENERGY_CHANCE = 0.15; // Now just flat energy pickup
+    const POWERUP_MISSILE_AMMO_CHANCE = 0.15;
+    const MAX_WEAPON_ENERGY_INCREASE_AMOUNT = 20; // Flat amount per powerup pickup
     const STAGE_SCORE_THRESHOLD = 300;
     const STAGE_HEAL_AMOUNT = 20;
-    const INITIAL_MAX_BOOSTER_FUEL = 100;
+    const INITIAL_MAX_BOOSTER_FUEL = 100; // Base Max
     const BOOSTER_COST_PER_FRAME = 1.0;
     const BOOSTER_REGEN_RATE = 0.3;
     const BOOSTER_REGEN_DELAY = 90;
     const BOOSTER_SPEED_MULTIPLIER = 1.8;
-    const BOOST_PICKUP_AMOUNT = 40;
-    const INITIAL_MAX_WEAPON_ENERGY = 100;
-    const WEAPON_ENERGY_REGEN_RATE = 0.5;
+    const BOOST_PICKUP_AMOUNT = 40; // Flat amount per powerup pickup
+    const INITIAL_MAX_WEAPON_ENERGY = 100; // Base Max
+    const WEAPON_ENERGY_REGEN_RATE = 0.5; // Base Rate
     const WEAPON_ENERGY_REGEN_DELAY = 60;
     const LASER_CANNON_COST = 15;
-    const LASER_CANNON_DAMAGE = 25;
+    const LASER_CANNON_DAMAGE = 25; // Base Damage
     const LASER_CANNON_SPEED = 8;
-    const WEAPON_ENERGY_PICKUP_AMOUNT = 50;
-    const INITIAL_MISSILE_AMMO = 3;
-    const MAX_MISSILE_AMMO = 10;
+    const INITIAL_MISSILE_AMMO = 3; // Base Max
+    const MAX_MISSILE_AMMO_CAP = 20; // Hard cap regardless of upgrades
     const MISSILE_PICKUP_AMOUNT = 2;
     const MISSILE_FIRE_COOLDOWN = 45;
-    const MISSILE_DAMAGE = 75;
+    const MISSILE_DAMAGE = 75; // Base Damage
     const MISSILE_SPEED = 5.0;
     const MISSILE_TURN_RATE = 0.08;
     const MISSILE_MAX_STEER_FORCE = 0.3;
     const ENEMY_SPAWN_CHANCE = 0.05;
-    const ENEMY_BASE_SPEED = 1.5; // <<< CHANGED TO POSITIVE FOR DOWNWARD MOVEMENT >>>
+    const ENEMY_BASE_SPEED = 1.5;
     const LASER_ENEMY_HEALTH = 50;
     const LASER_ENEMY_SHOOT_INTERVAL = 90;
-    const LASER_ENEMY_PROJECTILE_SPEED = 5; // Positive = Downwards (Correct)
+    const LASER_ENEMY_PROJECTILE_SPEED = 8;
     const LASER_ENEMY_PROJECTILE_DAMAGE = 10;
     const PULLER_ENEMY_HEALTH = 80;
     const PULLER_ENEMY_FORCE_MULTIPLIER = 500;
@@ -47,6 +48,14 @@ try {
     const ENEMY_PLAYER_COLLISION_DAMAGE = 30;
     const ENEMY_KILL_SCORE_LASER = 20;
     const ENEMY_KILL_SCORE_PULLER = 30;
+    const UPGRADE_POINT_CONVERSION_RATE = 0.5; // Score * Rate = Points Earned
+    const MAX_STREAK_TIME = 240; // Max time between kills for streak (4 seconds at 60fps)
+    const STREAK_MULTIPLIER_INCREMENT = 0.5; // Multiplier increases by this much per kill in streak
+    const MAX_STREAK_MULTIPLIER = 5.0; // Cap multiplier
+    const STREAK_NOTIFICATION_DURATION = 90; // How long streak text stays on screen
+    const STREAK_PULSE_SPEED_FACTOR = 0.1; // How fast tunnel brightness pulses with streak
+    const STREAK_PULSE_AMP_FACTOR = 5;   // How much tunnel brightness pulses with streak
+
 
     // --- Global Variables ---
     let player;
@@ -64,29 +73,37 @@ try {
     let speedIncrease = 0.003;
     let currentSpeed;
     let score = 0;
+    let lastScore = 0;
     let nextStageScore;
-    let gameState = 'START';
+    let gameState = 'START'; // START, PLAYING, GAME_OVER, UPGRADE
     let slowMoActive = false;
     let slowMoDuration = 300;
     let slowMoTimer = 0;
-    let healthPickupFlashTimer = 0;
-    const HEALTH_PICKUP_FLASH_DURATION = 30;
-    let boostPickupFlashTimer = 0;
-    const BOOST_PICKUP_FLASH_DURATION = 30;
-    let weaponEnergyPickupFlashTimer = 0;
-    const WEAPON_ENERGY_PICKUP_FLASH_DURATION = 30;
-    let missileAmmoPickupFlashTimer = 0;
-    const MISSILE_AMMO_PICKUP_FLASH_DURATION = 30;
-    // Keep debug vars in case needed later, but drawing is commented out
-    let debug_currentFrameMoveSpeed = 0;
-    let debug_moveIntentX = 0;
-    let debug_externalForceX = 0;
-    let debug_deltaX = 0;
-    let debug_leftKey = false;
-    let debug_rightKey = false;
-    let debug_shiftKey = false;
+    let healthPickupFlashTimer = 0; const HEALTH_PICKUP_FLASH_DURATION = 30;
+    let boostPickupFlashTimer = 0; const BOOST_PICKUP_FLASH_DURATION = 30;
+    let maxWeaponEnergyPickupFlashTimer = 0; const MAX_WEAPON_ENERGY_PICKUP_FLASH_DURATION = 30;
+    let missileAmmoPickupFlashTimer = 0; const MISSILE_AMMO_PICKUP_FLASH_DURATION = 30;
+    // --- Streak Variables ---
+    let streakCount = 0;
+    let streakMultiplier = 1.0;
+    let streakTimer = 0; // Time remaining to continue streak
+    let streakNotificationTimer = 0; // Display timer for streak text
+    let streakNotificationText = "";
+    // --- Upgrade System Data ---
+    let upgradePoints = 0;
+    let upgrades = {
+        maxEnergy: { name: "Max Energy", level: 0, cost: 100, baseCost: 100, scale: 1.5, effectPerLevel: 10 },
+        maxAmmo: { name: "Max Missiles", level: 0, cost: 150, baseCost: 150, scale: 1.6, effectPerLevel: 1 },
+        laserDamage: { name: "Laser Damage", level: 0, cost: 200, baseCost: 200, scale: 1.7, effectPerLevel: 5 },
+        missileDamage: { name: "Missile Damage", level: 0, cost: 300, baseCost: 300, scale: 1.8, effectPerLevel: 15 },
+        maxBooster: { name: "Max Boost Fuel", level: 0, cost: 120, baseCost: 120, scale: 1.5, effectPerLevel: 8 },
+        laserSpread: { name: "Laser Spread", level: 0, cost: 500, baseCost: 500, scale: 2.0, effectPerLevel: 1, maxLevel: 4 },
+        healthRegen: { name: "Health Regen", level: 0, cost: 250, baseCost: 250, scale: 1.6, effectPerLevel: 0.01, units: "/frame" },
+        energyRegen: { name: "Energy Regen", level: 0, cost: 180, baseCost: 180, scale: 1.6, effectPerLevel: 0.1, units: "/frame" }
+    };
+    const upgradeKeys = Object.keys(upgrades);
 
-    // --- Player Object --- (Keep As Is)
+    // --- Player Object ---
     class Player {
         constructor() {
             this.x = width / 2;
@@ -94,39 +111,44 @@ try {
             this.width = 20;
             this.height = 15;
             this.baseMoveSpeed = 5.5;
-            this.baseMaxHealth = INITIAL_MAX_HEALTH;
-            this.maxHealth = this.baseMaxHealth;
+            this.resetStatsBasedOnUpgrades();
             this.health = this.maxHealth;
-            this.healthRegenRate = HEALTH_REGEN_RATE;
-            this.regenDelayDuration = REGEN_DELAY_AFTER_HIT;
-            this.regenDelayTimer = 0;
-            this.maxBoosterFuel = INITIAL_MAX_BOOSTER_FUEL;
             this.boosterFuel = this.maxBoosterFuel;
-            this.boosterRegenRate = BOOSTER_REGEN_RATE;
-            this.boosterRegenDelayDuration = BOOSTER_REGEN_DELAY;
-            this.boosterRegenDelayTimer = 0;
-            this.boosterCost = BOOSTER_COST_PER_FRAME;
-            this.boosterMultiplier = BOOSTER_SPEED_MULTIPLIER;
-            this.isBoosting = false;
-            this.maxWeaponEnergy = INITIAL_MAX_WEAPON_ENERGY;
             this.weaponEnergy = this.maxWeaponEnergy;
-            this.weaponEnergyRegenRate = WEAPON_ENERGY_REGEN_RATE;
-            this.weaponEnergyRegenDelayDuration = WEAPON_ENERGY_REGEN_DELAY;
+            this.missileAmmo = this.maxMissileAmmo;
+            this.regenDelayTimer = 0;
+            this.boosterRegenDelayTimer = 0;
             this.weaponEnergyRegenDelayTimer = 0;
-            this.weaponCost = LASER_CANNON_COST;
-            this.weaponDamage = LASER_CANNON_DAMAGE;
-            this.weaponProjectileSpeed = LASER_CANNON_SPEED;
-            this.missileAmmo = INITIAL_MISSILE_AMMO;
-            this.maxMissileAmmo = MAX_MISSILE_AMMO;
-            this.missileFireCooldown = MISSILE_FIRE_COOLDOWN;
             this.missileFireTimer = 0;
+            this.damageFlashTimer = 0;
+            this.damageFlashDuration = 15;
+            this.isBoosting = false;
+            this.externalForceX = 0;
             this.baseColor = color(0, 0, 100);
             this.damageColor = color(0, 90, 100);
             this.boostColor = color(200, 80, 100);
-            this.damageFlashTimer = 0;
-            this.damageFlashDuration = 15;
-            this.externalForceX = 0;
         }
+
+        resetStatsBasedOnUpgrades() {
+            this.maxHealth = INITIAL_MAX_HEALTH;
+            this.maxWeaponEnergy = INITIAL_MAX_WEAPON_ENERGY + upgrades.maxEnergy.level * upgrades.maxEnergy.effectPerLevel;
+            this.maxMissileAmmo = min(MAX_MISSILE_AMMO_CAP, INITIAL_MISSILE_AMMO + upgrades.maxAmmo.level * upgrades.maxAmmo.effectPerLevel);
+            this.weaponDamage = LASER_CANNON_DAMAGE + upgrades.laserDamage.level * upgrades.laserDamage.effectPerLevel;
+            this.missileDamage = MISSILE_DAMAGE + upgrades.missileDamage.level * upgrades.missileDamage.effectPerLevel;
+            this.maxBoosterFuel = INITIAL_MAX_BOOSTER_FUEL + upgrades.maxBooster.level * upgrades.maxBooster.effectPerLevel;
+            this.laserSpreadLevel = upgrades.laserSpread.level;
+            this.healthRegenRate = HEALTH_REGEN_RATE + upgrades.healthRegen.level * upgrades.healthRegen.effectPerLevel;
+            this.weaponEnergyRegenRate = WEAPON_ENERGY_REGEN_RATE + upgrades.energyRegen.level * upgrades.energyRegen.effectPerLevel;
+            this.weaponCost = LASER_CANNON_COST;
+            this.boosterCost = BOOSTER_COST_PER_FRAME;
+            this.boosterMultiplier = BOOSTER_SPEED_MULTIPLIER;
+            this.weaponProjectileSpeed = LASER_CANNON_SPEED;
+            this.missileFireCooldown = MISSILE_FIRE_COOLDOWN;
+            this.regenDelayDuration = REGEN_DELAY_AFTER_HIT;
+            this.boosterRegenDelayDuration = BOOSTER_REGEN_DELAY;
+            this.weaponEnergyRegenDelayDuration = WEAPON_ENERGY_REGEN_DELAY;
+        }
+
         update() {
             this.isBoosting = false;
             this.externalForceX = 0;
@@ -138,146 +160,179 @@ try {
                     }
                 }
             }
-            debug_externalForceX = this.externalForceX;
-            debug_shiftKey = keyIsDown(SHIFT);
-            if (debug_shiftKey && this.boosterFuel > 0) {
+            let moveLeft = keyIsDown(LEFT_ARROW) || keyIsDown(65); // A
+            let moveRight = keyIsDown(RIGHT_ARROW) || keyIsDown(68); // D
+            let boostKey = keyIsDown(SHIFT);
+
+            if (boostKey && this.boosterFuel > 0) {
                 this.isBoosting = true;
                 this.boosterFuel = max(0, this.boosterFuel - this.boosterCost);
                 this.boosterRegenDelayTimer = this.boosterRegenDelayDuration;
             }
             if (!this.isBoosting) {
                 if (this.boosterRegenDelayTimer > 0) this.boosterRegenDelayTimer--;
-                else if (this.boosterFuel < this.maxBoosterFuel) this.boosterFuel = min(this.maxBoosterFuel, this.boosterFuel + this.boosterRegenRate);
+                else if (this.boosterFuel < this.maxBoosterFuel) this.boosterFuel = min(this.maxBoosterFuel, this.boosterFuel + BOOSTER_REGEN_RATE);
             }
+
             let currentFrameMoveSpeed = this.baseMoveSpeed;
             if (this.isBoosting) currentFrameMoveSpeed *= this.boosterMultiplier;
-            debug_currentFrameMoveSpeed = currentFrameMoveSpeed;
-            debug_leftKey = keyIsDown(LEFT_ARROW);
-            debug_rightKey = keyIsDown(RIGHT_ARROW);
             let moveIntentX = 0;
-            if (debug_leftKey) moveIntentX -= currentFrameMoveSpeed;
-            if (debug_rightKey) moveIntentX += currentFrameMoveSpeed;
-            debug_moveIntentX = moveIntentX;
+            if (moveLeft) moveIntentX -= currentFrameMoveSpeed;
+            if (moveRight) moveIntentX += currentFrameMoveSpeed;
             let deltaX = moveIntentX + this.externalForceX;
-            debug_deltaX = deltaX;
             if (!isNaN(deltaX)) this.x += deltaX;
             this.x = constrain(this.x, this.width / 2, width - this.width / 2);
-            if (this.regenDelayTimer > 0) {
-                this.regenDelayTimer--;
-            } else if (this.health < this.maxHealth && gameState === 'PLAYING') {
-                this.health = min(this.health + this.healthRegenRate, this.maxHealth);
-            }
-            if (this.weaponEnergyRegenDelayTimer > 0) {
-                this.weaponEnergyRegenDelayTimer--;
-            } else if (this.weaponEnergy < this.maxWeaponEnergy) {
-                this.weaponEnergy = min(this.weaponEnergy + this.weaponEnergyRegenRate, this.maxWeaponEnergy);
-            }
-            if (this.missileFireTimer > 0) {
-                this.missileFireTimer--;
-            }
+
+            // Regeneration
+            if (this.regenDelayTimer > 0) this.regenDelayTimer--;
+            else if (this.health < this.maxHealth && gameState === 'PLAYING') this.health = min(this.health + this.healthRegenRate, this.maxHealth);
+            if (this.weaponEnergyRegenDelayTimer > 0) this.weaponEnergyRegenDelayTimer--;
+            else if (this.weaponEnergy < this.maxWeaponEnergy) this.weaponEnergy = min(this.weaponEnergy + this.weaponEnergyRegenRate, this.maxWeaponEnergy);
+
+            // Cooldowns & Flashes
+            if (this.missileFireTimer > 0) this.missileFireTimer--;
             if (this.damageFlashTimer > 0) this.damageFlashTimer--;
             if (healthPickupFlashTimer > 0) healthPickupFlashTimer--;
             if (boostPickupFlashTimer > 0) boostPickupFlashTimer--;
-            if (weaponEnergyPickupFlashTimer > 0) weaponEnergyPickupFlashTimer--;
+            if (maxWeaponEnergyPickupFlashTimer > 0) maxWeaponEnergyPickupFlashTimer--;
             if (missileAmmoPickupFlashTimer > 0) missileAmmoPickupFlashTimer--;
         }
-        draw() {
+
+        draw(forceX = this.x, forceY = this.y) {
             let currentColor = this.baseColor;
             if (this.damageFlashTimer > 0) currentColor = lerpColor(this.baseColor, this.damageColor, this.damageFlashTimer / this.damageFlashDuration);
-            else if (this.isBoosting) currentColor = lerpColor(this.baseColor, this.boostColor, 0.7 + sin(frameCount * 0.5) * 0.3);
+            else if (this.isBoosting && gameState === 'PLAYING') currentColor = lerpColor(this.baseColor, this.boostColor, 0.7 + sin(frameCount * 0.5) * 0.3);
+
+            push();
+            translate(forceX, forceY);
+
+            // Base Ship Body
             fill(currentColor);
             noStroke();
             rectMode(CENTER);
-            rect(this.x, this.y, this.width, this.height);
-            if (this.isBoosting) {
-                fill(this.boostColor, 50);
-                noStroke();
-                rect(this.x, this.y + this.height * 0.8, this.width * 0.8, this.height * 1.5 + random(-2, 2), 3);
+            rect(0, 0, this.width, this.height);
+
+            // --- Visual Upgrades ---
+            let wingColor = lerpColor(currentColor, color(0, 0, 80), 0.3);
+            let cannonColor = lerpColor(currentColor, color(0, 0, 60), 0.5);
+            let glowColor = lerpColor(currentColor, color(60, 80, 100), 0.4);
+            let wingWidth = this.width * 0.4;
+            let wingHeight = this.height * 0.8; // Defined here
+
+            if (this.laserSpreadLevel > 0) { // Level 1+
+                fill(wingColor);
+                rect(-this.width * 0.6, 0, wingWidth, wingHeight, 2);
+                rect(this.width * 0.6, 0, wingWidth, wingHeight, 2);
             }
+            if (this.laserSpreadLevel > 1) { // Level 2+
+                fill(wingColor);
+                triangle(-this.width * 0.6, -wingHeight * 0.5, -this.width * 0.9, -wingHeight * 0.1, -this.width * 0.9, wingHeight * 0.7);
+                triangle(this.width * 0.6, -wingHeight * 0.5, this.width * 0.9, -wingHeight * 0.1, this.width * 0.9, wingHeight * 0.7);
+            }
+            if (this.laserSpreadLevel > 2) { // Level 3+
+                 fill(cannonColor);
+                 ellipse(-this.width * 0.9, this.height * 0.4, this.width * 0.3, this.height * 0.3);
+                 ellipse(this.width * 0.9, this.height * 0.4, this.width * 0.3, this.height * 0.3);
+            }
+            if (this.laserSpreadLevel > 3) { // Level 4 (Max)
+                 fill(glowColor);
+                 ellipse(0, -this.height * 0.6, this.width * 0.2, this.height * 0.2);
+                 ellipse(-this.width * 0.9, -this.height * 0.1, this.width * 0.15, this.height * 0.15);
+                 ellipse(this.width * 0.9, -this.height * 0.1, this.width * 0.15, this.height * 0.15);
+            }
+            // --- End Visual Upgrades ---
+
+            if (this.isBoosting && gameState === 'PLAYING') {
+                fill(this.boostColor, 50 + random(-10, 10));
+                noStroke();
+                rect(0, this.height * (this.laserSpreadLevel > 1 ? 0.9 : 0.8), this.width * 0.8, this.height * 1.5 + random(-3, 3), 3);
+            }
+            pop();
         }
+
         fireLaser() {
             if (this.weaponEnergy >= this.weaponCost) {
                 this.weaponEnergy -= this.weaponCost;
                 this.weaponEnergyRegenDelayTimer = this.weaponEnergyRegenDelayDuration;
+                let numLasers = 1 + this.laserSpreadLevel * 2;
+                let spreadAngle = PI / 24;
+                let startAngle = (numLasers === 1) ? 0 : -spreadAngle * (numLasers - 1) / 2;
                 if (playerProjectiles && Array.isArray(playerProjectiles)) {
-                    playerProjectiles.push(new Projectile(this.x, this.y - this.height / 2, 0, -this.weaponProjectileSpeed, 'PLAYER_LASER', this.weaponDamage));
+                    for (let i = 0; i < numLasers; i++) {
+                        let angle = startAngle + i * spreadAngle;
+                        let vx = sin(angle) * this.weaponProjectileSpeed;
+                        let vy = -cos(angle) * this.weaponProjectileSpeed;
+                        playerProjectiles.push(new Projectile(this.x, this.y - this.height / 2, vx, vy, 'PLAYER_LASER', this.weaponDamage));
+                    }
                 }
             }
         }
+
         fireMissile() {
             if (this.missileAmmo > 0 && this.missileFireTimer <= 0) {
                 this.missileAmmo--;
                 this.missileFireTimer = this.missileFireCooldown;
                 if (playerProjectiles && Array.isArray(playerProjectiles)) {
-                    playerProjectiles.push(new Projectile(this.x, this.y - this.height / 2, 0, -MISSILE_SPEED, 'PLAYER_MISSILE', MISSILE_DAMAGE));
+                    playerProjectiles.push(new Projectile(this.x, this.y - this.height / 2, 0, -MISSILE_SPEED, 'PLAYER_MISSILE', this.missileDamage));
                 }
             }
         }
+
         calculateWallDamage(tunnelSegments) {
             let collisionSegment = null;
             let minDist = Infinity;
             if (!tunnelSegments || !Array.isArray(tunnelSegments)) return 0;
             for (let seg of tunnelSegments) {
-                if (!seg || typeof seg.y === 'undefined' || typeof seg.x === 'undefined' || typeof seg.w === 'undefined') continue;
-                let dist = abs(seg.y - this.y);
-                if (seg.y < this.y + this.height / 2 && dist < minDist) {
-                    minDist = dist;
-                    collisionSegment = seg;
-                }
+                 if (!seg || typeof seg.y === 'undefined' || typeof seg.x === 'undefined' || typeof seg.w === 'undefined') continue;
+                 let distY = abs(seg.y - this.y);
+                 if (distY < this.height * 2) {
+                    let tunnelL = seg.x - seg.w / 2; let tunnelR = seg.x + seg.w / 2;
+                    let currentHalfWidth = (this.width / 2) * (1 + this.laserSpreadLevel * 0.3);
+                    let playerL = this.x - currentHalfWidth; let playerR = this.x + currentHalfWidth;
+                    if (playerL < tunnelL || playerR > tunnelR) {
+                        if (distY < minDist) { minDist = distY; collisionSegment = seg; }
+                    }
+                 }
             }
             if (collisionSegment) {
-                let tunnelL = collisionSegment.x - collisionSegment.w / 2,
-                    tunnelR = collisionSegment.x + collisionSegment.w / 2;
-                let playerL = this.x - this.width / 2,
-                    playerR = this.x + this.width / 2;
-                let overlap = 0;
-                if (playerL < tunnelL) overlap = tunnelL - playerL;
-                else if (playerR > tunnelR) overlap = playerR - tunnelR;
-                let speedFactor = (typeof currentSpeed === 'number' && currentSpeed > 0 && typeof baseSpeed === 'number' && baseSpeed > 0) ? (currentSpeed / baseSpeed) : 1;
-                if (overlap > 0) return overlap * BASE_DAMAGE_MULTIPLIER * speedFactor;
-            }
+                 let tunnelL = collisionSegment.x - collisionSegment.w / 2; let tunnelR = collisionSegment.x + collisionSegment.w / 2;
+                 let currentHalfWidth = (this.width / 2) * (1 + this.laserSpreadLevel * 0.3);
+                 let playerL = this.x - currentHalfWidth; let playerR = this.x + currentHalfWidth;
+                 let overlap = 0;
+                 if (playerL < tunnelL) overlap = tunnelL - playerL;
+                 else if (playerR > tunnelR) overlap = playerR - tunnelR;
+                 let speedFactor = (typeof currentSpeed === 'number' && currentSpeed > 0 && typeof baseSpeed === 'number' && baseSpeed > 0) ? (currentSpeed / baseSpeed) : 1;
+                 if (overlap > 0) return max(0.1, overlap * BASE_DAMAGE_MULTIPLIER * speedFactor);
+             }
             return 0;
         }
+
         takeDamage(amount, source = null) {
             if (amount <= 0 || isNaN(amount)) return;
             this.health -= amount;
             this.regenDelayTimer = this.regenDelayDuration;
             this.damageFlashTimer = this.damageFlashDuration;
             this.health = max(0, this.health);
-            if (this.health <= 0 && gameState === 'PLAYING') gameState = 'GAME_OVER';
+            if (this.health <= 0 && gameState === 'PLAYING') {
+                lastScore = score;
+                resetStreak(); // Reset streak on death
+                gameState = 'GAME_OVER';
+            }
         }
-        heal(amount) {
-            if (isNaN(amount) || amount <= 0) return;
-            this.health = min(this.health + amount, this.maxHealth);
-            healthPickupFlashTimer = HEALTH_PICKUP_FLASH_DURATION;
-        }
-        restoreBoost(amount) {
-            if (isNaN(amount) || amount <= 0) return;
-            this.boosterFuel = min(this.boosterFuel + amount, this.maxBoosterFuel);
-            boostPickupFlashTimer = BOOST_PICKUP_FLASH_DURATION;
-        }
-        restoreWeaponEnergy(amount) {
-            if (isNaN(amount) || amount <= 0) return;
-            this.weaponEnergy = min(this.weaponEnergy + amount, this.maxWeaponEnergy);
-            weaponEnergyPickupFlashTimer = WEAPON_ENERGY_PICKUP_FLASH_DURATION;
-        }
-        addMissileAmmo(amount) {
-            if (isNaN(amount) || amount <= 0) return;
-            this.missileAmmo = min(this.missileAmmo + amount, this.maxMissileAmmo);
-            missileAmmoPickupFlashTimer = MISSILE_AMMO_PICKUP_FLASH_DURATION;
-        }
-        increaseMaxHealth(amount) {
-            if (isNaN(amount) || amount <= 0) return;
-            this.maxHealth += amount;
-            this.heal(this.maxHealth);
-        }
+
+        heal(amount) { if (!isNaN(amount) && amount > 0) { this.health = min(this.health + amount, this.maxHealth); healthPickupFlashTimer = HEALTH_PICKUP_FLASH_DURATION; }}
+        restoreBoost(amount) { if (!isNaN(amount) && amount > 0) { this.boosterFuel = min(this.boosterFuel + amount, this.maxBoosterFuel); boostPickupFlashTimer = BOOST_PICKUP_FLASH_DURATION; }}
+        increaseMaxWeaponEnergy(amount) { if (!isNaN(amount) && amount > 0) { this.weaponEnergy = min(this.weaponEnergy + amount, this.maxWeaponEnergy); maxWeaponEnergyPickupFlashTimer = MAX_WEAPON_ENERGY_PICKUP_FLASH_DURATION; }}
+        addMissileAmmo(amount) { if (!isNaN(amount) && amount > 0) { this.missileAmmo = min(this.missileAmmo + amount, this.maxMissileAmmo); missileAmmoPickupFlashTimer = MISSILE_AMMO_PICKUP_FLASH_DURATION; }}
+        increaseMaxHealth(amount) { if (!isNaN(amount) && amount > 0) { this.heal(amount); }}
+
         checkPowerUpCollision(powerUpsToCheck) {
             if (!powerUpsToCheck || !Array.isArray(powerUpsToCheck)) return;
             for (let i = powerUpsToCheck.length - 1; i >= 0; i--) {
                 let pu = powerUpsToCheck[i];
                 if (!pu || typeof pu.x === 'undefined' || typeof pu.y === 'undefined' || typeof pu.size === 'undefined') continue;
                 let d = dist(this.x, this.y, pu.x, pu.y);
-                if (d < this.width / 2 + pu.size / 2) {
+                if (d < (this.width / 2 + pu.size / 2) * 1.1) {
                     let originalIndex = powerUps.indexOf(pu);
                     if (originalIndex > -1) {
                         this.activatePowerUp(pu.type);
@@ -286,404 +341,241 @@ try {
                 }
             }
         }
+
         checkEnemyCollision(enemiesToCheck) {
             if (!enemiesToCheck || !Array.isArray(enemiesToCheck)) return;
             for (let i = enemiesToCheck.length - 1; i >= 0; i--) {
                 let enemy = enemiesToCheck[i];
-                if (!enemy || typeof enemy.x === 'undefined' || typeof enemy.y === 'undefined' || typeof enemy.size === 'undefined' || typeof enemy.takeDamage !== 'function' || typeof enemy.isAlive !== 'function') continue;
-                let d = dist(this.x, this.y, enemy.x, enemy.y);
-                if (d < this.width / 2 + enemy.size / 2) {
+                 if (!enemy || typeof enemy.x === 'undefined' || typeof enemy.y === 'undefined' || typeof enemy.size === 'undefined' || typeof enemy.takeDamage !== 'function' || typeof enemy.isAlive !== 'function') continue;
+                 let currentHalfWidth = (this.width / 2) * (1 + this.laserSpreadLevel * 0.3);
+                 let playerL = this.x - currentHalfWidth; let playerR = this.x + currentHalfWidth;
+                 let playerT = this.y - this.height / 2; let playerB = this.y + this.height / 2;
+                 let enemyL = enemy.x - enemy.size / 2; let enemyR = enemy.x + enemy.size / 2;
+                 let enemyT = enemy.y - enemy.size / 2; let enemyB = enemy.y + enemy.size / 2;
+                 if (playerR > enemyL && playerL < enemyR && playerB > enemyT && playerT < enemyB) {
                     this.takeDamage(PLAYER_ENEMY_COLLISION_DAMAGE, 'ENEMY_COLLISION');
-                    if (enemies && i < enemies.length && enemies[i] === enemy && enemy.isAlive()) {
-                        enemy.takeDamage(ENEMY_PLAYER_COLLISION_DAMAGE);
-                    }
-                }
+                    if (enemies[i] === enemy && enemy.isAlive()) { enemy.takeDamage(ENEMY_PLAYER_COLLISION_DAMAGE); }
+                 }
             }
         }
         activatePowerUp(type) {
             if (type === 'HEALTH_PACK') this.heal(INITIAL_MAX_HEALTH * 0.4);
-            else if (type === 'SLOW_MO') {
-                slowMoActive = true;
-                slowMoTimer = slowMoDuration;
-            } else if (type === 'MAX_HEALTH_UP') this.increaseMaxHealth(INITIAL_MAX_HEALTH * 0.2);
+            else if (type === 'SLOW_MO') { slowMoActive = true; slowMoTimer = slowMoDuration; }
+            else if (type === 'MAX_HEALTH_UP') this.heal(INITIAL_MAX_HEALTH * 0.2);
             else if (type === 'BOOST_FUEL') this.restoreBoost(BOOST_PICKUP_AMOUNT);
-            else if (type === 'WEAPON_ENERGY') this.restoreWeaponEnergy(WEAPON_ENERGY_PICKUP_AMOUNT);
+            else if (type === 'MAX_WEAPON_ENERGY') this.increaseMaxWeaponEnergy(MAX_WEAPON_ENERGY_INCREASE_AMOUNT);
             else if (type === 'MISSILE_AMMO') this.addMissileAmmo(MISSILE_PICKUP_AMOUNT);
         }
         reset() {
-            this.x = width / 2;
-            this.y = height - 50;
-            this.health = this.maxHealth;
-            this.boosterFuel = this.maxBoosterFuel;
-            this.weaponEnergy = this.maxWeaponEnergy;
-            this.missileAmmo = INITIAL_MISSILE_AMMO;
-            this.missileFireTimer = 0;
-            this.regenDelayTimer = 0;
-            this.boosterRegenDelayTimer = 0;
-            this.weaponEnergyRegenDelayTimer = 0;
-            this.damageFlashTimer = 0;
-            this.isBoosting = false;
-            slowMoActive = false;
-            slowMoTimer = 0;
-            healthPickupFlashTimer = 0;
-            boostPickupFlashTimer = 0;
-            weaponEnergyPickupFlashTimer = 0;
-            missileAmmoPickupFlashTimer = 0;
+            this.x = width / 2; this.y = height - 50;
+            this.resetStatsBasedOnUpgrades();
+            this.health = this.maxHealth; this.boosterFuel = this.maxBoosterFuel;
+            this.weaponEnergy = this.maxWeaponEnergy; this.missileAmmo = this.maxMissileAmmo;
+            this.regenDelayTimer = 0; this.boosterRegenDelayTimer = 0; this.weaponEnergyRegenDelayTimer = 0;
+            this.missileFireTimer = 0; this.damageFlashTimer = 0; this.isBoosting = false;
+            slowMoActive = false; slowMoTimer = 0; healthPickupFlashTimer = 0; boostPickupFlashTimer = 0;
+            maxWeaponEnergyPickupFlashTimer = 0; missileAmmoPickupFlashTimer = 0;
         }
     }
 
-    // --- Projectile Object --- (Keep As Is)
+    // --- Projectile Object ---
     class Projectile {
         constructor(x, y, vx, vy, type, damage) {
-            this.x = x;
-            this.y = y;
-            this.vx = vx;
-            this.vy = vy;
-            this.type = type;
-            this.damage = damage;
-            if (type === 'PLAYER_LASER') {
-                this.size = 6;
-                this.color = color(150, 80, 100);
-            } else if (type === 'ENEMY_LASER') {
-                this.size = 5;
-                this.color = color(30, 90, 100);
-            } else if (type === 'PLAYER_MISSILE') {
-                this.size = 8;
-                this.color = color(0, 0, 100);
-                this.trail = [];
-                this.trailLength = 10;
-                this.targetEnemy = null;
-                this.maxSpeed = MISSILE_SPEED;
-                this.maxForce = MISSILE_MAX_STEER_FORCE;
+            this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+            this.type = type; this.damage = damage;
+            if (type === 'PLAYER_LASER') { this.size = 6; this.color = color(150, 80, 100); }
+            else if (type === 'ENEMY_LASER') { this.size = 5; this.color = color(30, 90, 100); }
+            else if (type === 'PLAYER_MISSILE') {
+                this.size = 8; this.color = color(0, 0, 100); this.trail = []; this.trailLength = 10;
+                this.targetEnemy = null; this.maxSpeed = MISSILE_SPEED; this.maxForce = MISSILE_MAX_STEER_FORCE;
                 let initialMag = sqrt(this.vx * this.vx + this.vy * this.vy);
-                if (initialMag > 0) {
-                    this.vx = (this.vx / initialMag) * this.maxSpeed;
-                    this.vy = (this.vy / initialMag) * this.maxSpeed;
-                } else {
-                    this.vy = -this.maxSpeed;
-                }
+                if (initialMag > 0) { this.vx = (this.vx / initialMag) * this.maxSpeed; this.vy = (this.vy / initialMag) * this.maxSpeed; }
+                else { this.vy = -this.maxSpeed; }
             }
         }
         findTarget() {
-            let closestDistSq = Infinity;
-            let closestEnemy = null;
+            let closestDistSq = Infinity; let closestEnemy = null;
             if (enemies && Array.isArray(enemies)) {
                 for (let enemy of enemies) {
-                    if (enemy && typeof enemy.isAlive === 'function' && enemy.isAlive()) {
+                    if (enemy && enemy.isAlive() && typeof enemy.x !== 'undefined' && typeof enemy.y !== 'undefined') {
                         let dSq = pow(enemy.x - this.x, 2) + pow(enemy.y - this.y, 2);
-                        if (dSq < closestDistSq) {
-                            closestDistSq = dSq;
-                            closestEnemy = enemy;
-                        }
+                        if (dSq < closestDistSq) { closestDistSq = dSq; closestEnemy = enemy; }
                     }
                 }
             }
             this.targetEnemy = closestEnemy;
         }
         seek(targetPos) {
+            if (!targetPos) return createVector(0,0);
             let desired = p5.Vector.sub(targetPos, createVector(this.x, this.y));
             desired.setMag(this.maxSpeed);
             let steer = p5.Vector.sub(desired, createVector(this.vx, this.vy));
-            steer.limit(this.maxForce);
-            return steer;
+            steer.limit(this.maxForce); return steer;
         }
         applyForce(force) {
-            this.vx += force.x;
-            this.vy += force.y;
-            let speedSq = this.vx * this.vx + this.vy * this.vy;
-            if (speedSq > this.maxSpeed * this.maxSpeed) {
-                let speed = sqrt(speedSq);
-                this.vx = (this.vx / speed) * this.maxSpeed;
-                this.vy = (this.vy / speed) * this.maxSpeed;
-            }
+             if (!force) return; this.vx += force.x; this.vy += force.y;
+             let speedSq = this.vx * this.vx + this.vy * this.vy;
+             if (speedSq > this.maxSpeed * this.maxSpeed) {
+                 let speed = sqrt(speedSq); this.vx = (this.vx / speed) * this.maxSpeed; this.vy = (this.vy / speed) * this.maxSpeed;
+             }
         }
         update() {
             if (this.type === 'PLAYER_MISSILE') {
-                this.trail.push(createVector(this.x, this.y));
-                if (this.trail.length > this.trailLength) {
-                    this.trail.splice(0, 1);
-                }
-                if (!this.targetEnemy || frameCount % 15 === 0) {
-                    this.findTarget();
-                }
-                if (this.targetEnemy && (!enemies.includes(this.targetEnemy) || !this.targetEnemy.isAlive())) {
-                    this.targetEnemy = null;
-                    this.findTarget();
-                }
-                if (this.targetEnemy) {
-                    let steerForce = this.seek(createVector(this.targetEnemy.x, this.targetEnemy.y));
-                    this.applyForce(steerForce);
+                this.trail.push(createVector(this.x, this.y)); if (this.trail.length > this.trailLength) this.trail.splice(0, 1);
+                if (!this.targetEnemy || !this.targetEnemy.isAlive() || frameCount % 15 === 0) this.findTarget();
+                if (this.targetEnemy && typeof this.targetEnemy.x !== 'undefined' && typeof this.targetEnemy.y !== 'undefined') {
+                     this.applyForce(this.seek(createVector(this.targetEnemy.x, this.targetEnemy.y)));
                 }
             }
-            this.x += this.vx;
-            this.y += this.vy;
+            this.x += this.vx; this.y += this.vy;
         }
         draw() {
-            if (this.type === 'PLAYER_MISSILE') {
-                noFill();
-                strokeWeight(2);
-                let trailColor = color(25, 90, 90, 50);
-                stroke(trailColor);
-                beginShape();
-                for (let v of this.trail) {
-                    vertex(v.x, v.y);
-                }
-                vertex(this.x, this.y);
-                endShape();
-                push();
-                translate(this.x, this.y);
-                let angle = atan2(this.vy, this.vx) + HALF_PI;
-                rotate(angle);
-                fill(this.color);
-                stroke(60, 80, 100);
-                strokeWeight(1);
+             if (this.type === 'PLAYER_MISSILE') {
+                noFill(); strokeWeight(2); stroke(25, 90, 90, 50); beginShape();
+                for (let v of this.trail) { vertex(v.x, v.y); } vertex(this.x, this.y); endShape();
+                push(); translate(this.x, this.y); let angle = atan2(this.vy, this.vx) + HALF_PI; rotate(angle);
+                fill(this.color); stroke(60, 80, 100); strokeWeight(1);
                 triangle(0, -this.size, -this.size * 0.5, this.size * 0.5, this.size * 0.5, this.size * 0.5);
-                fill(30, 90, 100, 80);
-                noStroke();
-                ellipse(0, this.size, this.size * 0.8, this.size * 1.2 + random(-2, 2));
-                pop();
+                fill(30, 90, 100, 80 + random(-10, 10)); noStroke();
+                ellipse(0, this.size * 0.8, this.size * 0.8, this.size * 1.2 + random(-2, 2)); pop();
             } else {
-                fill(this.color);
-                noStroke();
-                ellipse(this.x, this.y, this.size, this.size * 1.5);
+                fill(this.color); noStroke(); push(); translate(this.x, this.y);
+                let angle = atan2(this.vy, this.vx) + HALF_PI; rotate(angle);
+                ellipse(0, 0, this.size * 0.8, this.size * 1.8); pop();
             }
         }
-        isOffScreen() {
-            return (this.y < -this.size * 3 || this.y > height + this.size * 3 || this.x < -this.size * 3 || this.x > width + this.size * 3);
-        }
+        isOffScreen() { return (this.y < -this.size * 3 || this.y > height + this.size * 3 || this.x < -this.size * 3 || this.x > width + this.size * 3); }
         checkCollision(target) {
-            if (!target || typeof target.x === 'undefined' || typeof target.y === 'undefined' || (typeof target.width === 'undefined' && typeof target.size === 'undefined')) {
-                return false;
-            }
+            if (!target || typeof target.x === 'undefined' || typeof target.y === 'undefined') return false;
+            let targetSize = 0;
+            if (target instanceof Player) targetSize = max(target.width, target.height) / 2;
+            else if (target instanceof Enemy) targetSize = target.size / 2;
+            else return false;
             let d = dist(this.x, this.y, target.x, target.y);
-            let targetSize = (typeof target.width !== 'undefined') ? max(target.width, target.height || 0) : (target.size || 0);
-            return (d < this.size / 2 + targetSize / 2);
+            return (d < this.size / 2 + targetSize);
         }
     }
 
-    // --- Enemy Object --- <<< RESTORED ORIGINAL DRAWING >>>
+    // --- Enemy Object ---
     class Enemy {
-        constructor(x, y, type) {
-            this.x = x;
-            this.y = y;
-            this.type = type;
+         constructor(x, y, type) {
+            this.x = x; this.y = y; this.type = type;
             this.speed = ENEMY_BASE_SPEED * random(0.8, 1.2);
             this.size = (type === 'LASER') ? 25 : 35;
-            this.hitTimer = 0;
-            this.hitDuration = 10;
+            this.hitTimer = 0; this.hitDuration = 10;
             if (type === 'LASER') {
-                this.health = LASER_ENEMY_HEALTH;
-                this.maxHealth = LASER_ENEMY_HEALTH;
-                this.color = color(300, 70, 80);
-                this.shootCooldown = LASER_ENEMY_SHOOT_INTERVAL;
+                this.health = LASER_ENEMY_HEALTH; this.maxHealth = LASER_ENEMY_HEALTH;
+                this.baseColor = color(0, 70, 70); this.shootCooldown = LASER_ENEMY_SHOOT_INTERVAL;
                 this.shootTimer = random(this.shootCooldown);
             } else if (type === 'PULLER') {
-                this.health = PULLER_ENEMY_HEALTH;
-                this.maxHealth = PULLER_ENEMY_HEALTH;
-                this.color = color(240, 80, 70);
-                this.pullForce = PULLER_ENEMY_FORCE_MULTIPLIER;
-                this.pulseTimer = 0;
-            } else {
-                this.health = 1;
-                this.maxHealth = 1;
-                this.color = color(0, 0, 50);
-            }
+                this.health = PULLER_ENEMY_HEALTH; this.maxHealth = PULLER_ENEMY_HEALTH;
+                this.baseColor = color(270, 70, 60); this.pullForce = PULLER_ENEMY_FORCE_MULTIPLIER;
+                this.pulseTimer = random(TWO_PI);
+            } else { this.health = 1; this.maxHealth = 1; this.baseColor = color(0, 0, 50); }
         }
         update() {
-            this.y += this.speed;
+            this.y += this.speed * (slowMoActive ? 0.5 : 1);
             if (this.type === 'LASER') {
-                this.shootTimer -= 1;
-                if (this.shootTimer <= 0 && typeof this.shoot === 'function') {
-                    this.shoot();
-                    this.shootTimer = this.shootCooldown;
-                }
-            } else if (this.type === 'PULLER') {
-                this.pulseTimer += 0.05;
-            }
+                this.shootTimer -= (slowMoActive ? 0.5 : 1);
+                if (this.shootTimer <= 0) { this.shoot(); this.shootTimer = this.shootCooldown; }
+            } else if (this.type === 'PULLER') { this.pulseTimer += 0.05 * (slowMoActive ? 0.5 : 1); }
             if (this.hitTimer > 0) this.hitTimer--;
         }
-        shoot() {
-            if (enemyProjectiles && Array.isArray(enemyProjectiles)) {
-                enemyProjectiles.push(new Projectile(this.x, this.y + this.size / 2, 0, LASER_ENEMY_PROJECTILE_SPEED, 'ENEMY_LASER', LASER_ENEMY_PROJECTILE_DAMAGE));
-            }
-        }
+        shoot() { if (enemyProjectiles) enemyProjectiles.push(new Projectile(this.x, this.y + this.size / 2, 0, LASER_ENEMY_PROJECTILE_SPEED, 'ENEMY_LASER', LASER_ENEMY_PROJECTILE_DAMAGE)); }
         calculatePull(player) {
-            if (!player || typeof player.x === 'undefined' || typeof player.y === 'undefined') return 0;
+            if (!player || typeof player.x === 'undefined') return 0;
             let dSq = pow(player.x - this.x, 2) + pow(player.y - this.y, 2);
             if (dSq < PULLER_ENEMY_MIN_DIST_SQ) dSq = PULLER_ENEMY_MIN_DIST_SQ;
-            let distance = sqrt(dSq);
-            if (distance === 0) return 0;
+            let distance = sqrt(dSq); if (distance === 0) return 0;
             let forceMagnitude = this.pullForce / dSq;
-            let dirX = (this.x - player.x) / distance;
-            let forceX = dirX * forceMagnitude;
-            if (isNaN(forceX)) return 0;
-            return forceX;
+            let dirX = (this.x - player.x) / distance; let forceX = dirX * forceMagnitude;
+            return isNaN(forceX) ? 0 : forceX * (slowMoActive ? 0.3 : 1);
         }
-        takeDamage(amount) {
-            if (isNaN(amount)) return;
-            this.health -= amount;
-            this.hitTimer = this.hitDuration;
-        }
-        isAlive() {
-            return this.health > 0;
-        }
+        takeDamage(amount) { if (!isNaN(amount)) { this.health -= amount; this.hitTimer = this.hitDuration; } }
+        isAlive() { return this.health > 0; }
         draw() {
-            // console.log(`Drawing Enemy: Type=${this.type}, Pos=(${this.x.toFixed(1)}, ${this.y.toFixed(1)}), Health=${this.health.toFixed(0)}`); // <<< COMMENTED OUT LOG >>>
-            push();
-            translate(this.x, this.y);
-            let baseColor = this.color;
-            if (this.hitTimer > 0) baseColor = lerpColor(this.color, color(0, 0, 100), this.hitTimer / this.hitDuration);
-            strokeWeight(2);
-            stroke(0, 0, 100);
-
-            // <<< RESTORED ORIGINAL DRAWING LOGIC >>>
-            if (this.type === 'LASER') {
-                fill(baseColor);
-                triangle(0, this.size / 2, -this.size / 2, -this.size / 2, this.size / 2, -this.size / 2);
-            } else if (this.type === 'PULLER') {
-                let pulseSize = this.size * (1 + sin(this.pulseTimer) * 0.1);
-                fill(baseColor);
-                ellipse(0, 0, pulseSize, pulseSize);
-                fill(0, 0, 100, 50);
-                ellipse(0, 0, pulseSize * 0.4, pulseSize * 0.4);
-            } else {
-                fill(baseColor);
-                rectMode(CENTER);
-                rect(0, 0, this.size, this.size);
-            }
-            // <<< END RESTORED DRAWING LOGIC >>>
-
-            let healthPercent = this.health / this.maxHealth;
-            if (healthPercent < 1 && healthPercent >= 0) {
-                let barW = this.size * 0.8;
-                let barH = 4;
-                rectMode(CORNER);
-                fill(0, 90, 80);
-                noStroke();
-                rect(-barW / 2, -this.size / 2 - barH - 2, barW, barH);
-                fill(120, 80, 80);
-                rect(-barW / 2, -this.size / 2 - barH - 2, barW * healthPercent, barH);
-            }
+             push(); translate(this.x, this.y);
+             let displayColor = this.baseColor;
+             if (this.hitTimer > 0) displayColor = lerpColor(this.baseColor, color(0, 0, 100), this.hitTimer / this.hitDuration);
+             strokeWeight(2); stroke(0, 0, 20);
+             if (this.type === 'LASER') {
+                 fill(displayColor);
+                 triangle(0, this.size * 0.6, -this.size * 0.5, -this.size * 0.4, this.size * 0.5, -this.size * 0.4);
+                 fill(0, 0, 40); rectMode(CENTER);
+                 rect(-this.size * 0.4, -this.size * 0.05, this.size * 0.2, this.size * 0.4);
+                 rect(this.size * 0.4, -this.size * 0.05, this.size * 0.2, this.size * 0.4);
+                 fill(30, 90, 100, 80); noStroke(); ellipse(0, this.size * 0.65, this.size * 0.15, this.size * 0.2);
+             } else if (this.type === 'PULLER') {
+                 let pulseSize = this.size * (1 + sin(this.pulseTimer) * 0.15); fill(displayColor); ellipse(0, 0, pulseSize, pulseSize);
+                 fill(0, 0, 10, 90); ellipse(0, 0, pulseSize * 0.4, pulseSize * 0.4);
+                 stroke(displayColor, 30); strokeWeight(1);
+                 for(let a = 0; a < TWO_PI; a += PI / 6) { let len = pulseSize * 0.6; line(cos(a) * len * 0.4, sin(a) * len * 0.4, cos(a) * len, sin(a) * len); }
+             }
+             let healthPercent = this.health / this.maxHealth;
+             if (healthPercent < 1 && healthPercent >= 0) {
+                 let barW = max(this.size * 0.8, 20); let barH = 5; let barY = -this.size * 0.6 - barH - 3;
+                 rectMode(CORNER); fill(0, 90, 80, 70); noStroke(); rect(-barW / 2, barY, barW, barH, 2);
+                 fill(120, 80, 80); rect(-barW / 2, barY, barW * healthPercent, barH, 2);
+             }
             pop();
         }
     }
 
-    // --- PowerUp Object --- (Keep As Is)
+    // --- PowerUp Object ---
     class PowerUp {
-        constructor(x, y, type) {
-            this.x = x;
-            this.y = y;
-            this.type = type;
-            this.size = 15;
-            this.rotation = random(TWO_PI);
+         constructor(x, y, type) {
+            this.x = x; this.y = y; this.type = type; this.size = 15; this.rotation = random(TWO_PI);
             switch (type) {
-                case 'HEALTH_PACK':
-                    this.color = color(120, 80, 90);
-                    break;
-                case 'SLOW_MO':
-                    this.color = color(270, 80, 90);
-                    break;
-                case 'MAX_HEALTH_UP':
-                    this.color = color(60, 90, 100);
-                    break;
-                case 'BOOST_FUEL':
-                    this.color = color(200, 80, 100);
-                    break;
-                case 'WEAPON_ENERGY':
-                    this.color = color(30, 90, 100);
-                    break;
-                case 'MISSILE_AMMO':
-                    this.color = color(0, 0, 85);
-                    break;
-                default:
-                    this.color = color(0, 0, 50);
+                case 'HEALTH_PACK': this.color = color(120, 80, 90); break;
+                case 'SLOW_MO': this.color = color(270, 80, 90); break;
+                case 'MAX_HEALTH_UP': this.color = color(120, 75, 85); this.borderColor = color(50, 90, 100); break;
+                case 'BOOST_FUEL': this.color = color(200, 80, 100); break;
+                case 'MAX_WEAPON_ENERGY': this.color = color(180, 90, 90); break;
+                case 'MISSILE_AMMO': this.color = color(0, 0, 85); break;
+                default: this.color = color(0, 0, 50);
             }
         }
-        update(speed) {
-            this.y += speed;
-            this.rotation += 0.05;
-        }
+        update(speed) { this.y += speed; this.rotation += 0.05 * (slowMoActive ? 0.5 : 1); }
         draw() {
-            push();
-            translate(this.x, this.y);
-            rotate(this.rotation);
-            strokeWeight(2);
-            stroke(0, 0, 100);
-            rectMode(CENTER);
-            ellipseMode(CENTER);
-            textAlign(CENTER, CENTER);
-            if (this.type === 'HEALTH_PACK') {
-                fill(this.color);
-                rect(0, 0, this.size * 0.4, this.size);
-                rect(0, 0, this.size, this.size * 0.4);
-            } else if (this.type === 'SLOW_MO') {
-                fill(this.color);
-                ellipse(0, 0, this.size * 1.2, this.size * 1.2);
-                fill(0, 0, 100);
-                noStroke();
-                textSize(this.size * 0.8);
-                text('S', 0, 1);
-            } else if (this.type === 'MAX_HEALTH_UP') {
-                fill(this.color);
-                triangle(0, -this.size * 0.7, -this.size * 0.6, this.size * 0.5, this.size * 0.6, this.size * 0.5);
-                noStroke();
-                fill(0, 0, 100);
-                textSize(this.size * 0.6);
-                text('+', 0, this.size * 0.2);
-            } else if (this.type === 'BOOST_FUEL') {
-                fill(this.color);
-                noStroke();
-                beginShape();
-                vertex(-this.size * 0.6, -this.size * 0.5);
-                vertex(0, 0);
-                vertex(-this.size * 0.6, this.size * 0.5);
-                endShape(CLOSE);
-                beginShape();
-                vertex(0, -this.size * 0.5);
-                vertex(this.size * 0.6, 0);
-                vertex(0, this.size * 0.5);
-                endShape(CLOSE);
-            } else if (this.type === 'WEAPON_ENERGY') {
-                fill(this.color);
-                ellipse(0, 0, this.size, this.size);
-                fill(0, 0, 100);
-                noStroke();
-                textSize(this.size * 0.7);
-                text('E', 0, 1);
-            } else if (this.type === 'MISSILE_AMMO') {
-                fill(this.color);
-                triangle(0, -this.size * 0.7, -this.size * 0.4, this.size * 0.5, this.size * 0.4, this.size * 0.5);
-                rect(0, this.size * 0.4, this.size * 0.5, this.size * 0.2);
-            }
-            pop();
+             push(); translate(this.x, this.y); rotate(this.rotation); strokeWeight(2); stroke(0, 0, 100);
+             rectMode(CENTER); ellipseMode(CENTER); textAlign(CENTER, CENTER);
+             if (this.type === 'HEALTH_PACK') { fill(this.color); rect(0, 0, this.size * 0.4, this.size); rect(0, 0, this.size, this.size * 0.4); }
+             else if (this.type === 'MAX_HEALTH_UP') { fill(this.color); stroke(this.borderColor); strokeWeight(3); rect(0, 0, this.size * 0.4, this.size); rect(0, 0, this.size, this.size * 0.4); }
+             else if (this.type === 'SLOW_MO') { fill(this.color); ellipse(0, 0, this.size * 1.2, this.size * 1.2); fill(0, 0, 100); noStroke(); textSize(this.size * 0.8); text('S', 0, 1); }
+             else if (this.type === 'BOOST_FUEL') {
+                 fill(this.color); noStroke(); beginShape(); vertex(-this.size * 0.6, -this.size * 0.5); vertex(0, 0); vertex(-this.size * 0.6, this.size * 0.5); endShape(CLOSE); beginShape(); vertex(0, -this.size * 0.5); vertex(this.size * 0.6, 0); vertex(0, this.size * 0.5); endShape(CLOSE);
+                 stroke(0, 0, 100); strokeWeight(2); noFill(); beginShape(); vertex(-this.size * 0.6, -this.size * 0.5); vertex(0, 0); vertex(-this.size * 0.6, this.size * 0.5); vertex(0, this.size*0.5); vertex(this.size * 0.6, 0); vertex(0, -this.size * 0.5); endShape(CLOSE);
+             } else if (this.type === 'MAX_WEAPON_ENERGY') { fill(this.color); ellipse(0, 0, this.size, this.size); fill(0, 0, 100); noStroke(); textSize(this.size * 0.7); text('E', 0, 1); }
+             else if (this.type === 'MISSILE_AMMO') { fill(this.color); triangle(0, -this.size * 0.7, -this.size * 0.4, this.size * 0.5, this.size * 0.4, this.size * 0.5); rect(0, this.size * 0.4, this.size * 0.5, this.size * 0.2); }
+             pop();
         }
     }
 
-    // --- Setup --- (Keep As Is)
+    // --- Setup ---
     function setup() {
         createCanvas(windowWidth, windowHeight);
         colorMode(HSB, 360, 100, 100, 100);
         player = new Player();
         textAlign(CENTER, CENTER);
         textFont('monospace');
-        resetGame();
-        gameState = 'START';
     }
 
-    // --- Reset Game State --- (Keep As Is)
+    // --- Reset Game State ---
     function resetGame() {
         score = 0;
         currentSpeed = baseSpeed;
         nextStageScore = STAGE_SCORE_THRESHOLD;
         noiseOffset = random(1000);
         if (player && typeof player.reset === 'function') player.reset();
+        else player = new Player();
         initTunnel();
         enemies = [];
         playerProjectiles = [];
         enemyProjectiles = [];
+        resetStreak();
     }
 
-    // --- Initialize Tunnel --- (Keep As Is)
+    // --- Initialize Tunnel ---
     function initTunnel() {
         tunnel = [];
         powerUps = [];
@@ -691,74 +583,80 @@ try {
         noiseOffset = random(1000);
     }
 
-    // --- Add Tunnel Segment --- <<< SPAWN ENEMY AT yPos AGAIN >>>
+    // --- Add Tunnel Segment ---
     function addTunnelSegment(yPos, preventSpawns = false) {
         let noiseVal = noise(noiseOffset + yPos * 0.01);
         let centerX = map(noiseVal, 0, 1, width * 0.25, width * 0.75);
         let segmentWidth = tunnelWidthBase + sin(noiseOffset * 5 + yPos * 0.05) * tunnelWidthVariance;
         segmentWidth = constrain(segmentWidth, 70, width * 0.9);
-        tunnel.unshift({
-            y: yPos,
-            x: centerX,
-            w: segmentWidth
-        });
+        tunnel.unshift({ y: yPos, x: centerX, w: segmentWidth });
         if (!preventSpawns && gameState === 'PLAYING') {
             if (random() < POWERUP_SPAWN_CHANCE) {
-                let puX = centerX + random(-segmentWidth * 0.35, segmentWidth * 0.35);
-                let puY = yPos + segmentHeight / 2;
-                let randType = random();
-                let puType;
-                if (randType < POWERUP_HEALTH_CHANCE) puType = 'HEALTH_PACK';
-                else if (randType < POWERUP_HEALTH_CHANCE + POWERUP_SLOWMO_CHANCE) puType = 'SLOW_MO';
-                else if (randType < POWERUP_HEALTH_CHANCE + POWERUP_SLOWMO_CHANCE + POWERUP_MAX_HEALTH_CHANCE) puType = 'MAX_HEALTH_UP';
-                else if (randType < POWERUP_HEALTH_CHANCE + POWERUP_SLOWMO_CHANCE + POWERUP_MAX_HEALTH_CHANCE + POWERUP_BOOST_FUEL_CHANCE) puType = 'BOOST_FUEL';
-                else if (randType < POWERUP_HEALTH_CHANCE + POWERUP_SLOWMO_CHANCE + POWERUP_MAX_HEALTH_CHANCE + POWERUP_BOOST_FUEL_CHANCE + POWERUP_WEAPON_ENERGY_CHANCE) puType = 'WEAPON_ENERGY';
-                else puType = 'MISSILE_AMMO';
-                if (powerUps && Array.isArray(powerUps)) powerUps.push(new PowerUp(puX, puY, puType));
+                let puX = centerX + random(-segmentWidth * 0.35, segmentWidth * 0.35); let puY = yPos + segmentHeight / 2;
+                let randType = random(); let puType; let cumulativeChance = 0;
+                cumulativeChance += POWERUP_HEALTH_CHANCE; if (randType < cumulativeChance) { puType = 'HEALTH_PACK'; }
+                else { cumulativeChance += POWERUP_SLOWMO_CHANCE; if (randType < cumulativeChance) { puType = 'SLOW_MO'; }
+                else { cumulativeChance += POWERUP_MAX_HEALTH_CHANCE; if (randType < cumulativeChance) { puType = 'MAX_HEALTH_UP'; }
+                else { cumulativeChance += POWERUP_BOOST_FUEL_CHANCE; if (randType < cumulativeChance) { puType = 'BOOST_FUEL'; }
+                else { cumulativeChance += POWERUP_MAX_WEAPON_ENERGY_CHANCE; if (randType < cumulativeChance) { puType = 'MAX_WEAPON_ENERGY'; }
+                else { puType = 'MISSILE_AMMO'; }}}}}
+                if (powerUps) powerUps.push(new PowerUp(puX, puY, puType));
             }
             if (random() < ENEMY_SPAWN_CHANCE) {
-                let enemyX = centerX + random(-segmentWidth * 0.4, segmentWidth * 0.4);
-                let enemyY = yPos; // <<< SPAWN NEAR TOP EDGE >>>
-                let enemyType = random() > 0.5 ? 'LASER' : 'PULLER';
-                if (enemies && Array.isArray(enemies)) {
-                    let newEnemy = new Enemy(enemyX, enemyY, enemyType);
-                    enemies.push(newEnemy); /* console.log(`Spawned ${enemyType} at y=${enemyY.toFixed(1)}`); */
-                }
+                let enemyX = centerX + random(-segmentWidth * 0.4, segmentWidth * 0.4); let enemyY = yPos;
+                let enemyType = random() > 0.5 ? 'LASER' : 'PULLER'; if (enemies) enemies.push(new Enemy(enemyX, enemyY, enemyType));
             }
         }
     }
 
-    // --- Draw Tunnel --- (Keep As Is)
+    // --- Draw Tunnel (Enhanced Streak Effects) ---
     function drawTunnel() {
-        strokeWeight(3);
+        let currentMultiplier = max(1, streakMultiplier);
+        let thickness = 3 + floor(currentMultiplier * 0.5);
+        let hueSpeed = 0.4 + currentMultiplier * 0.3;
+        let baseSaturation = 80;
+        let baseBrightness = 90;
+        let pulseSaturation = baseSaturation + sin(frameCount * STREAK_PULSE_SPEED_FACTOR * currentMultiplier) * STREAK_PULSE_AMP_FACTOR * (currentMultiplier -1);
+        let pulseBrightness = baseBrightness + cos(frameCount * STREAK_PULSE_SPEED_FACTOR * 1.5 * currentMultiplier) * STREAK_PULSE_AMP_FACTOR * (currentMultiplier -1);
+        pulseSaturation = constrain(pulseSaturation, 60, 100);
+        pulseBrightness = constrain(pulseBrightness, 70, 100);
+        let finalSaturation = slowMoActive ? baseSaturation * 0.7 : pulseSaturation;
+        let finalBrightness = slowMoActive ? baseBrightness * 0.8 : pulseBrightness;
+
+        strokeWeight(thickness);
         noFill();
-        let hue = (frameCount * 0.4) % 360;
+        let hue = (frameCount * hueSpeed) % 360;
+
         if (!tunnel || !Array.isArray(tunnel)) return;
         for (let i = 0; i < tunnel.length - 1; i++) {
-            let seg1 = tunnel[i],
-                seg2 = tunnel[i + 1];
+            let seg1 = tunnel[i], seg2 = tunnel[i + 1];
             if (!seg1 || !seg2 || typeof seg1.x === 'undefined' || typeof seg2.x === 'undefined') continue;
-            let tunnelColor = color(hue, slowMoActive ? 40 : 80, slowMoActive ? 70 : 90);
+            let tunnelColor = color(hue, finalSaturation, finalBrightness, slowMoActive ? 70 : 100);
             stroke(tunnelColor);
             line(seg1.x - seg1.w / 2, seg1.y, seg2.x - seg2.w / 2, seg2.y);
             line(seg1.x + seg1.w / 2, seg1.y, seg2.x + seg2.w / 2, seg2.y);
         }
     }
 
-    // --- Update World State --- <<< CORRECTED ENEMY REMOVAL CHECK >>>
+    // --- Update World State (Enhanced Streak Logic) ---
     function updateWorld() {
-        // Player update is called first in drawGame now
         if (!player) return;
         let effectiveSpeed = currentSpeed * (slowMoActive ? 0.5 : 1);
         if (slowMoActive && --slowMoTimer <= 0) slowMoActive = false;
-        // Update Tunnel
+
+        // Update Streak Timer
+        if (streakTimer > 0) {
+             streakTimer -= (slowMoActive ? 0.5 : 1);
+             if (streakTimer <= 0) {
+                 resetStreak(); // Call reset when timer expires
+             }
+        }
+        if (streakNotificationTimer > 0) streakNotificationTimer--;
+
+        // Update Tunnel & Score
         if (tunnel && Array.isArray(tunnel)) {
             for (let i = tunnel.length - 1; i >= 0; i--) {
-                let seg = tunnel[i];
-                if (!seg || typeof seg.y === 'undefined') {
-                    tunnel.splice(i, 1);
-                    continue;
-                };
+                let seg = tunnel[i]; if (!seg || typeof seg.y === 'undefined') { tunnel.splice(i, 1); continue; };
                 seg.y += effectiveSpeed;
                 if (seg.y > height + segmentHeight * 2) {
                     tunnel.splice(i, 1);
@@ -771,453 +669,272 @@ try {
                     }
                 }
             }
-            if (tunnel.length === 0 || (tunnel[0] && tunnel[0].y > -segmentHeight)) {
-                addTunnelSegment(tunnel.length > 0 && tunnel[0] ? tunnel[0].y - segmentHeight : -segmentHeight);
-            }
+            if (tunnel.length === 0 || (tunnel[0] && tunnel[0].y > -segmentHeight)) addTunnelSegment(tunnel.length > 0 && tunnel[0] ? tunnel[0].y - segmentHeight : -segmentHeight);
         }
         // Update Powerups
-        if (powerUps && Array.isArray(powerUps)) {
-            for (let i = powerUps.length - 1; i >= 0; i--) {
-                let pu = powerUps[i];
-                if (!pu || typeof pu.update !== 'function' || typeof pu.y === 'undefined') {
-                    powerUps.splice(i, 1);
-                    continue;
-                }
-                pu.update(effectiveSpeed);
-                if (pu.y > height + 20) powerUps.splice(i, 1);
-            }
-        }
-        // Update Enemies
+        if (powerUps) powerUps.forEach((pu, i) => { if (pu) { pu.update(effectiveSpeed); if (pu.y > height + 20) powerUps.splice(i, 1); } else powerUps.splice(i, 1); });
+
+        // Update Enemies & Handle Kills
         if (enemies && Array.isArray(enemies)) {
             for (let i = enemies.length - 1; i >= 0; i--) {
-                let enemy = enemies[i];
-                if (!enemy || typeof enemy.update !== 'function' || typeof enemy.y === 'undefined' || typeof enemy.isAlive !== 'function') {
-                    enemies.splice(i, 1);
-                    continue;
-                }
+                let enemy = enemies[i]; if (!enemy || typeof enemy.update !== 'function') { enemies.splice(i, 1); continue; }
                 enemy.update();
-                // <<< CORRECTED REMOVAL CHECK FOR DOWNWARD MOVEMENT >>>
-                if (enemy.y > height + enemy.size * 2) {
-                    enemies.splice(i, 1);
-                } else if (!enemy.isAlive()) {
-                    score += (enemy.type === 'PULLER' ? ENEMY_KILL_SCORE_PULLER : ENEMY_KILL_SCORE_LASER);
+                if (enemy.y > height + enemy.size * 2) { enemies.splice(i, 1); }
+                else if (!enemy.isAlive()) {
+                    streakCount++;
+                    streakMultiplier = min(MAX_STREAK_MULTIPLIER, 1.0 + max(0, streakCount - 1) * STREAK_MULTIPLIER_INCREMENT);
+                    streakTimer = MAX_STREAK_TIME;
+                    if (streakMultiplier > 1.0) {
+                        streakNotificationText = `Streak x${streakMultiplier.toFixed(1)}!`;
+                        streakNotificationTimer = STREAK_NOTIFICATION_DURATION;
+                    }
+                    let baseKillScore = (enemy.type === 'PULLER' ? ENEMY_KILL_SCORE_PULLER : ENEMY_KILL_SCORE_LASER);
+                    score += floor(baseKillScore * streakMultiplier);
                     enemies.splice(i, 1);
                 }
             }
         }
         // Update Projectiles & Collisions
-        if (playerProjectiles && Array.isArray(playerProjectiles)) {
-            for (let i = playerProjectiles.length - 1; i >= 0; i--) {
-                let proj = playerProjectiles[i];
-                if (!proj || typeof proj.update !== 'function' || typeof proj.isOffScreen !== 'function') {
-                    playerProjectiles.splice(i, 1);
-                    continue;
-                }
-                proj.update();
-                if (proj.isOffScreen()) {
-                    playerProjectiles.splice(i, 1);
-                    continue;
-                }
-                if (enemies && Array.isArray(enemies)) {
-                    for (let j = enemies.length - 1; j >= 0; j--) {
-                        let enemy = enemies[j];
-                        if (!enemy) continue;
-                        if (i < playerProjectiles.length && playerProjectiles[i] === proj && proj.checkCollision(enemy)) {
-                            if (typeof enemy.takeDamage === 'function') enemy.takeDamage(proj.damage);
-                            playerProjectiles.splice(i, 1);
-                            break;
-                        }
-                    }
-                }
-            }
-        }
-        if (enemyProjectiles && Array.isArray(enemyProjectiles)) {
-            for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
-                let proj = enemyProjectiles[i];
-                if (!proj || typeof proj.update !== 'function' || typeof proj.isOffScreen !== 'function') {
-                    enemyProjectiles.splice(i, 1);
-                    continue;
-                }
-                proj.update();
-                if (proj.isOffScreen()) {
-                    enemyProjectiles.splice(i, 1);
-                    continue;
-                }
-                if (player) {
-                    if (i < enemyProjectiles.length && enemyProjectiles[i] === proj && proj.checkCollision(player)) {
-                        if (typeof player.takeDamage === 'function') player.takeDamage(proj.damage, 'ENEMY_PROJECTILE');
-                        enemyProjectiles.splice(i, 1);
-                    }
-                }
-            }
-        }
-        // Player vs Enemy Collision
-        if (typeof player.checkEnemyCollision === 'function') {
-            player.checkEnemyCollision(enemies);
-        }
+         if (playerProjectiles) {
+             for (let i = playerProjectiles.length - 1; i >= 0; i--) {
+                 let proj = playerProjectiles[i]; if (!proj) { playerProjectiles.splice(i, 1); continue; } proj.update();
+                 if (proj.isOffScreen()) { playerProjectiles.splice(i, 1); continue; }
+                 if (enemies) {
+                     for (let j = enemies.length - 1; j >= 0; j--) {
+                          let enemy = enemies[j];
+                          if (i < playerProjectiles.length && playerProjectiles[i] === proj && enemy && proj.checkCollision(enemy)) {
+                              if (enemy.takeDamage) enemy.takeDamage(proj.damage);
+                              playerProjectiles.splice(i, 1); break;
+                          }
+                     }
+                 }
+             }
+         }
+         if (enemyProjectiles) {
+             for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
+                 let proj = enemyProjectiles[i]; if (!proj) { enemyProjectiles.splice(i, 1); continue; } proj.update();
+                 if (proj.isOffScreen()) { enemyProjectiles.splice(i, 1); continue; }
+                 if (i < enemyProjectiles.length && enemyProjectiles[i] === proj && player && proj.checkCollision(player)) {
+                     if (player.takeDamage) player.takeDamage(proj.damage, 'ENEMY_PROJECTILE');
+                     enemyProjectiles.splice(i, 1);
+                 }
+             }
+         }
+        // Player Collisions
+         if (player) {
+              player.checkEnemyCollision(enemies);
+              player.checkPowerUpCollision(powerUps);
+              let wallDamage = player.calculateWallDamage(tunnel);
+              if (wallDamage > 0) player.takeDamage(wallDamage, 'WALL');
+         }
         // Speed Increase
         if (!slowMoActive) currentSpeed += speedIncrease;
         noiseOffset += noiseSpeed * (effectiveSpeed / baseSpeed);
     }
 
+    // --- Reset Streak ---
+    function resetStreak() {
+        streakCount = 0;
+        streakMultiplier = 1.0;
+        streakTimer = 0;
+        streakNotificationTimer = min(streakNotificationTimer, 15); // Fast fade out
+    }
 
-    // --- Draw All Game Elements --- (Keep As Is)
+    // --- Draw All Game Elements ---
     function drawGameElements() {
         drawTunnel();
-        if (powerUps && Array.isArray(powerUps))
-            for (let pu of powerUps)
-                if (pu && typeof pu.draw === 'function') pu.draw();
-        if (playerProjectiles && Array.isArray(playerProjectiles))
-            for (let p of playerProjectiles)
-                if (p && typeof p.draw === 'function') p.draw();
-        if (enemyProjectiles && Array.isArray(enemyProjectiles))
-            for (let ep of enemyProjectiles)
-                if (ep && typeof ep.draw === 'function') ep.draw();
-        if (enemies && Array.isArray(enemies)) {
-            for (let e of enemies) {
-                if (e && typeof e.draw === 'function') {
-                    e.draw();
-                }
-            }
-        }
-        if (player && typeof player.draw === 'function') player.draw();
+        if (powerUps) powerUps.forEach(pu => pu && pu.draw());
+        if (playerProjectiles) playerProjectiles.forEach(p => p && p.draw());
+        if (enemyProjectiles) enemyProjectiles.forEach(ep => ep && ep.draw());
+        if (enemies) enemies.forEach(e => e && e.draw());
+        if (player) player.draw();
     }
 
-    // --- Draw Health Bar --- (Keep As Is)
+    // --- Draw UI Elements ---
     function drawHealthBar() {
-        if (!player) return;
-        let barWidth = 200;
-        let barHeight = 20;
-        let barX = width / 2 - barWidth / 2;
-        let barY = 20;
-        let healthPercent = player.health / player.maxHealth;
-        if (isNaN(healthPercent)) healthPercent = 0;
-        rectMode(CORNER);
-        noStroke();
-        fill(0, 0, 20);
-        rect(barX, barY, barWidth, barHeight, 5);
-        let healthColor = color(120, 80, 80);
-        if (healthPickupFlashTimer > 0) healthColor = lerpColor(color(120, 50, 100), healthColor, healthPickupFlashTimer / HEALTH_PICKUP_FLASH_DURATION);
-        if (healthPercent < 0.5) healthColor = lerpColor(color(0, 90, 90), color(60, 90, 90), constrain(healthPercent * 2, 0, 1));
-        else healthColor = lerpColor(color(60, 90, 90), color(120, 80, 80), constrain((healthPercent - 0.5) * 2, 0, 1));
-        fill(healthColor);
-        rect(barX, barY, barWidth * constrain(healthPercent, 0, 1), barHeight, 5);
-        fill(0, 0, 100);
-        textSize(14);
-        textAlign(CENTER, CENTER);
-        text(`${ceil(player.health)} / ${ceil(player.maxHealth)}`, barX + barWidth / 2, barY + barHeight / 2 + 1);
+         if (!player) return; let barWidth = 200; let barHeight = 20; let barX = width / 2 - barWidth / 2; let barY = 20; let healthPercent = player.health / player.maxHealth; if (isNaN(healthPercent)) healthPercent = 0; rectMode(CORNER); noStroke(); fill(0, 0, 20); rect(barX, barY, barWidth, barHeight, 5); let healthColor = color(120, 80, 80); if (healthPickupFlashTimer > 0) healthColor = lerpColor(color(120, 50, 100), healthColor, healthPickupFlashTimer / HEALTH_PICKUP_FLASH_DURATION); if (healthPercent < 0.5) healthColor = lerpColor(color(0, 90, 90), color(60, 90, 90), constrain(healthPercent * 2, 0, 1)); else healthColor = lerpColor(color(60, 90, 90), color(120, 80, 80), constrain((healthPercent - 0.5) * 2, 0, 1)); fill(healthColor); rect(barX, barY, barWidth * constrain(healthPercent, 0, 1), barHeight, 5); fill(0, 0, 100); textSize(14); textAlign(CENTER, CENTER); text(`${ceil(player.health)} / ${ceil(player.maxHealth)}`, barX + barWidth / 2, barY + barHeight / 2 + 1);
     }
-
-    // --- Draw Booster Bar --- (Keep As Is)
     function drawBoosterBar() {
-        if (!player) return;
-        let barWidth = 150;
-        let barHeight = 12;
-        let barX = width / 2 - barWidth / 2;
-        let barY = 45;
-        let boostPercent = player.boosterFuel / player.maxBoosterFuel;
-        if (isNaN(boostPercent)) boostPercent = 0;
-        rectMode(CORNER);
-        noStroke();
-        fill(0, 0, 20, 80);
-        rect(barX, barY, barWidth, barHeight, 3);
-        let boostColor = color(200, 80, 90);
-        if (boostPickupFlashTimer > 0) boostColor = lerpColor(color(200, 50, 100), boostColor, boostPickupFlashTimer / BOOST_PICKUP_FLASH_DURATION);
-        if (player.boosterRegenDelayTimer > 0 && !player.isBoosting) boostColor = lerpColor(boostColor, color(0, 0, 30), 0.5);
-        fill(boostColor);
-        rect(barX, barY, barWidth * constrain(boostPercent, 0, 1), barHeight, 3);
-        fill(0, 0, 100, 80);
-        textSize(10);
-        textAlign(CENTER, CENTER);
-        text(`BOOST`, barX + barWidth / 2, barY + barHeight / 2 + 1);
+         if (!player) return; let barWidth = 150; let barHeight = 12; let barX = width / 2 - barWidth / 2; let barY = 45; let boostPercent = player.boosterFuel / player.maxBoosterFuel; if (isNaN(boostPercent)) boostPercent = 0; rectMode(CORNER); noStroke(); fill(0, 0, 20, 80); rect(barX, barY, barWidth, barHeight, 3); let boostColor = color(200, 80, 90); if (boostPickupFlashTimer > 0) boostColor = lerpColor(color(200, 50, 100), boostColor, boostPickupFlashTimer / BOOST_PICKUP_FLASH_DURATION); if (player.boosterRegenDelayTimer > 0 && !player.isBoosting) boostColor = lerpColor(boostColor, color(0, 0, 30), 0.5); fill(boostColor); rect(barX, barY, barWidth * constrain(boostPercent, 0, 1), barHeight, 3); fill(0, 0, 100, 80); textSize(10); textAlign(CENTER, CENTER); text(`BOOST ${ceil(player.boosterFuel)}/${ceil(player.maxBoosterFuel)}`, barX + barWidth / 2, barY + barHeight / 2 + 1);
     }
-
-    // --- Draw Weapon Energy Bar --- (Keep As Is)
     function drawWeaponEnergyBar() {
-        if (!player) return;
-        let barWidth = 150;
-        let barHeight = 12;
-        let barX = width / 2 - barWidth / 2;
-        let barY = 60;
-        let energyPercent = player.weaponEnergy / player.maxWeaponEnergy;
-        if (isNaN(energyPercent)) energyPercent = 0;
-        rectMode(CORNER);
-        noStroke();
-        fill(0, 0, 20, 80);
-        rect(barX, barY, barWidth, barHeight, 3);
-        let energyColor = color(30, 90, 100);
-        if (weaponEnergyPickupFlashTimer > 0) energyColor = lerpColor(color(45, 70, 100), energyColor, weaponEnergyPickupFlashTimer / WEAPON_ENERGY_PICKUP_FLASH_DURATION);
-        if (player.weaponEnergyRegenDelayTimer > 0) energyColor = lerpColor(energyColor, color(0, 0, 30), 0.5);
-        fill(energyColor);
-        rect(barX, barY, barWidth * constrain(energyPercent, 0, 1), barHeight, 3);
-        fill(0, 0, 100, 80);
-        textSize(10);
-        textAlign(CENTER, CENTER);
-        text(`ENERGY`, barX + barWidth / 2, barY + barHeight / 2 + 1);
+         if (!player) return; let barWidth = 150; let barHeight = 12; let barX = width / 2 - barWidth / 2; let barY = 60; let energyPercent = player.weaponEnergy / player.maxWeaponEnergy; if (isNaN(energyPercent)) energyPercent = 0; rectMode(CORNER); noStroke(); fill(0, 0, 20, 80); rect(barX, barY, barWidth, barHeight, 3); let energyColor = color(180, 90, 90); if (maxWeaponEnergyPickupFlashTimer > 0) energyColor = lerpColor(color(180, 60, 100), energyColor, maxWeaponEnergyPickupFlashTimer / MAX_WEAPON_ENERGY_PICKUP_FLASH_DURATION); if (player.weaponEnergyRegenDelayTimer > 0) energyColor = lerpColor(energyColor, color(0, 0, 30), 0.5); fill(energyColor); rect(barX, barY, barWidth * constrain(energyPercent, 0, 1), barHeight, 3); fill(0, 0, 100, 80); textSize(10); textAlign(CENTER, CENTER); text(`ENERGY ${ceil(player.weaponEnergy)}/${ceil(player.maxWeaponEnergy)}`, barX + barWidth / 2, barY + barHeight / 2 + 1);
     }
-
-    // --- Draw Missile Ammo UI --- (Keep As Is)
     function drawMissileUI() {
-        if (!player) return;
-        let iconSize = 18;
-        let spacing = 5;
-        let startX = width - 30 - (player.missileAmmo * (iconSize + spacing));
-        let yPos = 55;
-        for (let i = 0; i < player.missileAmmo; i++) {
-            let x = startX + i * (iconSize + spacing);
-            push();
-            translate(x, yPos);
-            fill(0, 0, 85);
-            if (missileAmmoPickupFlashTimer > 0) {
-                fill(lerpColor(color(0, 0, 100), color(0, 0, 85), missileAmmoPickupFlashTimer / MISSILE_AMMO_PICKUP_FLASH_DURATION));
-            }
-            stroke(0, 0, 100);
-            strokeWeight(1);
-            triangle(0, -iconSize * 0.6, -iconSize * 0.3, iconSize * 0.4, iconSize * 0.3, iconSize * 0.4);
-            pop();
-        }
-        fill(0, 0, 100);
-        textSize(12);
-        textAlign(RIGHT, CENTER);
-        text(`MISSILES`, startX - spacing * 2, yPos);
+         if (!player) return; let startX = width - 30; let yPos = 55; fill(0, 0, 100); textSize(12); textAlign(RIGHT, CENTER); text(`MISSILES: ${player.missileAmmo}/${player.maxMissileAmmo}`, startX, yPos);
     }
-
-    // --- Draw Game UI --- (Keep As Is)
     function drawUI() {
         if (!player) return;
-        fill(0, 0, 100);
-        noStroke();
-        textSize(18);
-        textAlign(LEFT, TOP);
+        fill(0, 0, 100); noStroke(); textSize(18); textAlign(LEFT, TOP);
         text(`SCORE: ${score}`, 20, 20);
         text(`SPEED: ${currentSpeed.toFixed(1)}`, 20, 45);
         text(`STAGE: ${floor(score / STAGE_SCORE_THRESHOLD) + 1} (${score % STAGE_SCORE_THRESHOLD}/${STAGE_SCORE_THRESHOLD})`, 20, 70);
+
+        textAlign(RIGHT, TOP);
+        text(`POINTS: ${upgradePoints}`, width - 20, 20);
+
+        // Enhanced Streak Display
+        if (streakMultiplier > 1.0 && streakTimer > 0) {
+             let streakHue = map(streakMultiplier, 1, MAX_STREAK_MULTIPLIER, 60, 0);
+             let streakSize = 20 + streakMultiplier * 1.5;
+             let pulseBrightness = 80 + sin(frameCount * STREAK_PULSE_SPEED_FACTOR * 2 * streakMultiplier) * 20;
+             fill(streakHue, 90, pulseBrightness);
+             textSize(streakSize);
+             text(`x${streakMultiplier.toFixed(1)}`, width - 20, 75);
+             let timerWidth = 100 + streakMultiplier * 5;
+             let timerHeight = 5 + streakMultiplier * 0.5;
+             let timerX = width - 20 - timerWidth;
+             let timerY = 80 + streakSize * 0.5;
+             fill(0,0,20, 80); rectMode(CORNER); rect(timerX, timerY, timerWidth, timerHeight, 2);
+             fill(streakHue, 90, 100); rect(timerX, timerY, timerWidth * (streakTimer / MAX_STREAK_TIME), timerHeight, 2);
+        }
+        // Streak Notification
+         if (streakNotificationTimer > 0 && streakNotificationText) {
+             textAlign(CENTER, CENTER);
+             let alpha = map(streakNotificationTimer, 0, STREAK_NOTIFICATION_DURATION, 0, 100);
+             let flashFreq = 0.2 + streakMultiplier * 0.05;
+             let baseBright = 60; let flashAmp = 40;
+             let brightness = baseBright + sin(frameCount * flashFreq) * flashAmp;
+             let notificationHue = map(streakMultiplier, 1, MAX_STREAK_MULTIPLIER, 60, 0);
+             fill(notificationHue, 90, brightness, alpha);
+             textSize(28 + streakMultiplier * 2);
+             text(streakNotificationText, width / 2, height * 0.2);
+         }
+
         if (slowMoActive) {
-            textAlign(RIGHT, TOP);
-            fill(270, 80, 90);
-            textSize(18);
-            text(`SLOW-MO [${ceil(slowMoTimer / 60)}s]`, width - 20, 20);
+            fill(270, 80, 90); textSize(18); textAlign(RIGHT, TOP);
+            text(`SLOW-MO [${ceil(slowMoTimer / 60)}s]`, width - 20, 45);
         }
-        drawHealthBar();
-        drawBoosterBar();
-        drawWeaponEnergyBar();
-        drawMissileUI();
+        drawHealthBar(); drawBoosterBar(); drawWeaponEnergyBar(); drawMissileUI();
     }
 
-    // --- Draw Debug Info --- (Keep As Is)
-    function drawDebugInfo() {
-        if (!player) return;
-        let yPos = 110;
-        const spacing = 18;
-        const xPos = 20;
-        fill(0, 0, 100, 80);
-        noStroke();
-        textSize(14);
-        textAlign(LEFT, TOP);
-        text(`DEBUG INFO:`, xPos, yPos);
-        yPos += spacing * 1.5;
-        text(`GameState: ${gameState}`, xPos, yPos);
-        yPos += spacing;
-        text(`Left Key: ${debug_leftKey}`, xPos, yPos);
-        yPos += spacing;
-        text(`Right Key: ${debug_rightKey}`, xPos, yPos);
-        yPos += spacing;
-        text(`Shift Key: ${debug_shiftKey}`, xPos, yPos);
-        yPos += spacing;
-        text(`Player Boosting: ${player.isBoosting}`, xPos, yPos);
-        yPos += spacing;
-        text(`Frame Move Speed: ${debug_currentFrameMoveSpeed.toFixed(2)}`, xPos, yPos);
-        yPos += spacing;
-        text(`Move Intent X: ${debug_moveIntentX.toFixed(2)}`, xPos, yPos);
-        yPos += spacing;
-        text(`External Force X: ${debug_externalForceX.toFixed(2)}`, xPos, yPos);
-        yPos += spacing;
-        text(`Final Delta X: ${debug_deltaX.toFixed(2)}`, xPos, yPos);
-        yPos += spacing;
-        text(`Player X Pos: ${player.x.toFixed(2)}`, xPos, yPos);
-        yPos += spacing;
-        text(`Player Fuel: ${player.boosterFuel.toFixed(1)}`, xPos, yPos);
-        yPos += spacing;
-        text(`Enemy Count: ${enemies ? enemies.length : 0}`, xPos, yPos);
-        yPos += spacing;
-        text(`PowerUp Count: ${powerUps ? powerUps.length : 0}`, xPos, yPos);
-        yPos += spacing;
-        if (enemies && enemies.length > 0) {
-            if (enemies[0]) {
-                /* console.log("Enemy[0] object:", enemies[0]); */
-                text(`Enemy[0] Pos: (${enemies[0].x.toFixed(1)}, ${enemies[0].y.toFixed(1)})`, xPos, yPos);
-                yPos += spacing;
-                text(`Enemy[0] Type: ${enemies[0].type}`, xPos, yPos);
-                yPos += spacing;
-                text(`Enemy[0] Health: ${enemies[0].health.toFixed(0)}`, xPos, yPos);
-                yPos += spacing;
-            } else {
-                text(`Enemy[0]: null/undefined`, xPos, yPos);
-                yPos += spacing; /* console.log("Enemy[0] is null or undefined"); */
-            }
-        } else {
-            text(`Enemy[0] Pos: N/A`, xPos, yPos);
-            yPos += spacing;
-        }
-    }
-
-    // --- Draw Game State --- <<< COMMENTED OUT DEBUG DRAW >>>
+    // --- Draw Game State ---
     function drawGame() {
         try {
             background(0, 0, 5);
-            // 1. Update Player
-            if (player && typeof player.update === 'function') {
-                player.update();
-            }
-            // 2. Update World
+            if (player) player.update();
             updateWorld();
-            // 3. Handle Player Collisions
-            if (player && typeof player.calculateWallDamage === 'function') {
-                let wallDamage = player.calculateWallDamage(tunnel);
-                if (wallDamage > 0) player.takeDamage(wallDamage, 'WALL');
-            }
-            if (player && typeof player.checkPowerUpCollision === 'function') {
-                player.checkPowerUpCollision(powerUps);
-            }
-            // 4. Draw everything
             drawGameElements();
-            // 5. Draw UI
-            if (gameState === 'PLAYING') {
-                drawUI();
-                // drawDebugInfo(); // <<< COMMENTED OUT DEBUG DRAW >>>
-            }
+            drawUI();
         } catch (error) {
             console.error("Error during game loop:", error);
-            fill(255, 0, 0);
-            textSize(20);
-            textAlign(CENTER, CENTER);
-            text("An error occurred. Check console.", width / 2, height / 2);
-            noLoop();
+            fill(255, 0, 0); textSize(20); textAlign(CENTER, CENTER); text("Error in game loop. Check console.", width / 2, height / 2);
+            if (typeof noLoop === 'function') { try { noLoop(); } catch(e) {} }
         }
     }
 
-
-    // --- Draw Start Screen --- (Keep As Is)
+    // --- Draw Start Screen ---
     function drawStartScreen() {
-        background(200, 80, 30);
-        fill(0, 0, 100);
-        noStroke();
-        textAlign(CENTER, CENTER);
-        textSize(48);
-        text("TUNNEL RACER", width / 2, height / 2 - 220);
-        textSize(20);
-        text("Dodge Walls, Enemies, & Lasers!", width / 2, height / 2 - 170);
-        textSize(16);
-        let yPos = height / 2 - 120;
-        let xText = width / 2 + 20;
-        let xIcon = width / 2 - 110;
-        let spacing = 28;
-        textAlign(LEFT, CENTER);
-        let pu = new PowerUp(xIcon, yPos, 'HEALTH_PACK');
-        if (pu && typeof pu.draw === 'function') pu.draw();
-        text("= Health Pack", xText, yPos);
-        yPos += spacing;
-        pu = new PowerUp(xIcon, yPos, 'SLOW_MO');
-        if (pu && typeof pu.draw === 'function') pu.draw();
-        text("= Slow Motion", xText, yPos);
-        yPos += spacing;
-        pu = new PowerUp(xIcon, yPos, 'MAX_HEALTH_UP');
-        if (pu && typeof pu.draw === 'function') pu.draw();
-        text("= Max Health Up", xText, yPos);
-        yPos += spacing;
-        pu = new PowerUp(xIcon, yPos, 'BOOST_FUEL');
-        if (pu && typeof pu.draw === 'function') pu.draw();
-        text("= Boost Fuel", xText, yPos);
-        yPos += spacing;
-        pu = new PowerUp(xIcon, yPos, 'WEAPON_ENERGY');
-        if (pu && typeof pu.draw === 'function') pu.draw();
-        text("= Laser Energy", xText, yPos);
-        yPos += spacing;
-        pu = new PowerUp(xIcon, yPos, 'MISSILE_AMMO');
-        if (pu && typeof pu.draw === 'function') pu.draw();
-        text("= Missile Ammo", xText, yPos);
-        yPos += spacing;
-        let en = new Enemy(xIcon, yPos, 'LASER');
-        if (en && typeof en.draw === 'function') en.draw();
-        text("= Laser Enemy (Shoots!)", xText, yPos);
-        yPos += spacing;
-        en = new Enemy(xIcon, yPos, 'PULLER');
-        if (en && typeof en.draw === 'function') en.draw();
-        text("= Puller Enemy (Gravitational!)", xText, yPos);
-        yPos += spacing;
-        textAlign(CENTER, CENTER);
-        textSize(22);
-        yPos += spacing * 0.5;
-        text("LEFT/RIGHT: Steer", width / 2, yPos);
-        yPos += spacing;
-        text("Hold SHIFT: Boost", width / 2, yPos);
-        yPos += spacing;
-        text("Press X: Fire Laser", width / 2, yPos);
-        yPos += spacing;
-        text("Press M: Fire Missile", width / 2, yPos);
-        yPos += spacing;
-        textSize(24);
-        yPos += spacing * 0.5;
-        text("Press SPACE to Start", width / 2, yPos);
+        background(200, 80, 30); fill(0, 0, 100); noStroke(); textAlign(CENTER, CENTER);
+        textSize(48); text("TUNNEL RACER", width / 2, height * 0.1);
+        textSize(20); text("Dodge Walls, Enemies, & Lasers!", width / 2, height * 0.18);
+        if (player && typeof player.draw === 'function') {
+             let shipDisplayY = height * 0.3;
+             player.draw(width / 2, shipDisplayY);
+             textSize(14); text("(Your Current Ship)", width/2, shipDisplayY + 35);
+        }
+        textSize(22); let controlY = height * 0.45; text("CONTROLS", width/2, controlY);
+        controlY += 35; textSize(16); textAlign(LEFT, CENTER); let controlX = width / 2 - 150;
+        text("A / Left Arrow : Steer Left", controlX, controlY); controlY += 25;
+        text("D / Right Arrow: Steer Right", controlX, controlY); controlY += 25;
+        text("Shift          : Boost", controlX, controlY); controlY += 25;
+        text("L              : Fire Laser", controlX, controlY); controlY += 25;
+        text("M              : Fire Missile", controlX, controlY); controlY += 25;
+        textAlign(CENTER, CENTER); textSize(16);
+        text("Earn points from score, then press 'U' after Game Over to upgrade!", width / 2, height * 0.8);
+        textSize(24); text("Press SPACE to Start", width / 2, height * 0.9);
     }
 
-    // --- Draw Game Over Screen --- (Keep As Is)
+    // --- Draw Game Over Screen ---
     function drawGameOverScreen() {
-        background(0, 90, 50);
-        fill(0, 0, 100);
-        noStroke();
-        textAlign(CENTER, CENTER);
-        textSize(48);
-        text("GAME OVER", width / 2, height / 2 - 60);
-        textSize(32);
-        text(`Final Score: ${score}`, width / 2, height / 2);
-        if (player && typeof player.maxHealth !== 'undefined') text(`Max Health Reached: ${ceil(player.maxHealth)}`, width / 2, height / 2 + 40);
-        textSize(24);
-        text("Press SPACE to Restart", width / 2, height / 2 + 90);
+         background(0, 90, 50); fill(0, 0, 100); noStroke(); textAlign(CENTER, CENTER);
+         textSize(48); text("GAME OVER", width / 2, height / 2 - 120);
+         textSize(32); text(`Final Score: ${lastScore}`, width / 2, height / 2 - 60);
+         let pointsEarned = floor(lastScore * UPGRADE_POINT_CONVERSION_RATE);
+         textSize(24); text(`Upgrade Points Earned: ${pointsEarned}`, width / 2, height / 2 - 20);
+         text(`Total Upgrade Points: ${upgradePoints + pointsEarned}`, width/2, height/2 + 10);
+         textSize(28); text("Press 'U' to Upgrade", width / 2, height / 2 + 70);
+         textSize(24); text("Press SPACE to Restart (without upgrading)", width / 2, height / 2 + 120);
     }
 
-    // --- Main Draw Loop --- (Keep As Is)
+    // --- Draw Upgrade Screen ---
+    function drawUpgradeScreen() {
+         background(240, 50, 20); fill(0, 0, 100); noStroke(); textAlign(CENTER, CENTER);
+         textSize(36); text("SHIP UPGRADES", width / 2, 50);
+         textSize(24); text(`Available Points: ${upgradePoints}`, width / 2, 100);
+         let startY = 150; let spacingY = 55; let startX = width * 0.1; let colWidth = width * 0.8; let textX = startX + 20;
+         textAlign(LEFT, TOP); textSize(16);
+         for (let i = 0; i < upgradeKeys.length; i++) {
+             let key = upgradeKeys[i]; let upg = upgrades[key]; let currentY = startY + i * spacingY;
+             let maxLevelReached = (upg.maxLevel !== undefined && upg.level >= upg.maxLevel);
+             fill(0, 0, 10, 50); noStroke(); rect(startX, currentY - 10, colWidth, spacingY - 5, 5);
+             fill(0, 0, 100); text(`(${i + 1}) ${upg.name} [Lv ${upg.level}]`, textX, currentY);
+             let baseValue = 0;
+             if (key === 'maxEnergy') baseValue = INITIAL_MAX_WEAPON_ENERGY; else if (key === 'maxAmmo') baseValue = INITIAL_MISSILE_AMMO; else if (key === 'laserDamage') baseValue = LASER_CANNON_DAMAGE; else if (key === 'missileDamage') baseValue = MISSILE_DAMAGE; else if (key === 'maxBooster') baseValue = INITIAL_MAX_BOOSTER_FUEL; else if (key === 'healthRegen') baseValue = HEALTH_REGEN_RATE; else if (key === 'energyRegen') baseValue = WEAPON_ENERGY_REGEN_RATE; else if (key === 'laserSpread') baseValue = 1;
+             let totalValue = baseValue + upg.level * upg.effectPerLevel;
+             if (key === 'laserSpread') totalValue = 1 + upg.level*2;
+             if (key === 'maxAmmo') totalValue = min(MAX_MISSILE_AMMO_CAP, baseValue + upg.level * upg.effectPerLevel);
+             let effectStr = `Effect: ${totalValue.toFixed(upg.units === "/frame" ? 2 : 0)}`;
+             if (key === 'laserSpread') effectStr = `Lasers Fired: ${totalValue}`;
+             if (key === 'maxAmmo' && totalValue >= MAX_MISSILE_AMMO_CAP) effectStr += " (Max Cap)";
+             text(effectStr, textX + 300, currentY);
+             let costX = startX + colWidth - 180;
+             if (maxLevelReached) { fill(20, 80, 80); text("MAX LEVEL", costX, currentY); }
+             else { if (upgradePoints >= upg.cost) fill(120, 80, 90); else fill(0, 80, 90); text(`Cost: ${upg.cost} pts`, costX, currentY); }
+         }
+         textAlign(CENTER, CENTER); textSize(20);
+         text("Press number keys (1-8) to purchase upgrades.", width / 2, height - 70);
+         text("Press 'B' to go Back to Start Screen", width / 2, height - 40);
+    }
+
+    // --- Main Draw Loop ---
     function draw() {
         switch (gameState) {
-            case 'START':
-                drawStartScreen();
-                break;
-            case 'PLAYING':
-                drawGame();
-                break;
-            case 'GAME_OVER':
-                drawGameOverScreen();
-                break;
+            case 'START': drawStartScreen(); break;
+            case 'PLAYING': drawGame(); break;
+            case 'GAME_OVER': drawGameOverScreen(); break;
+            case 'UPGRADE': drawUpgradeScreen(); break;
         }
     }
 
-    // --- Input Handling --- (Keep As Is)
+    // --- Input Handling ---
     function keyPressed() {
-        if (keyCode === 32) {
-            if (gameState === 'START' || gameState === 'GAME_OVER') {
-                gameState = 'PLAYING';
-                resetGame();
+        if (gameState === 'PLAYING') {
+            if (keyCode === 76) { if (player) player.fireLaser(); } // L
+            else if (keyCode === 77) { if (player) player.fireMissile(); } // M
+        } else if (gameState === 'START') {
+            if (keyCode === 32) { resetGame(); gameState = 'PLAYING'; } // SPACE
+        } else if (gameState === 'GAME_OVER') {
+            if (keyCode === 32) { resetGame(); gameState = 'PLAYING'; } // SPACE
+            else if (keyCode === 85) { // U
+                 let pointsEarned = floor(lastScore * UPGRADE_POINT_CONVERSION_RATE);
+                 upgradePoints += pointsEarned; lastScore = 0; gameState = 'UPGRADE';
             }
-        } else if (keyCode === 88 || keyCode === 67) {
-            if (gameState === 'PLAYING' && player && typeof player.fireLaser === 'function') {
-                player.fireLaser();
-            }
-        } else if (keyCode === 77) {
-            if (gameState === 'PLAYING' && player && typeof player.fireMissile === 'function') {
-                player.fireMissile();
-            }
+        } else if (gameState === 'UPGRADE') {
+             if (keyCode === 66) { gameState = 'START'; } // B
+             let upgradeIndex = -1;
+             if (keyCode >= 49 && keyCode <= 56) upgradeIndex = keyCode - 49; // 1-8
+             else if (keyCode >= 97 && keyCode <= 104) upgradeIndex = keyCode - 97; // Numpad 1-8
+             if (upgradeIndex >= 0 && upgradeIndex < upgradeKeys.length) {
+                 let key = upgradeKeys[upgradeIndex]; let upg = upgrades[key];
+                 let maxLevelReached = (upg.maxLevel !== undefined && upg.level >= upg.maxLevel);
+                 if (!maxLevelReached && upgradePoints >= upg.cost) {
+                     upgradePoints -= upg.cost; upg.level++;
+                     upg.cost = floor(upg.baseCost * pow(upg.scale, upg.level));
+                      // Also update the player immediately if they are around (e.g., for start screen drawing)
+                     if(player && player.resetStatsBasedOnUpgrades) player.resetStatsBasedOnUpgrades();
+                 }
+             }
         }
     }
 
-    // --- Window Resize --- (Keep As Is)
+    // --- Window Resize ---
     function windowResized() {
         resizeCanvas(windowWidth, windowHeight);
         if (player) player.y = height - 50;
-        resetGame();
-        gameState = 'START';
     }
 
+// --- Final Catch Block ---
 } catch (error) {
-    console.error("Error:", error);
-    document.body.innerHTML = '<pre class="console">Error: ' + error.message + '\nCheck the browser console for details.</pre>';
+     console.error("RUNTIME ERROR:", error); try { if (typeof background === 'function' && typeof fill === 'function' && typeof textSize === 'function' && typeof textAlign === 'function' && typeof text === 'function' && typeof width !== 'undefined' && typeof height !== 'undefined') { background(0); fill(255, 0, 0); textSize(16); textAlign(CENTER, CENTER); text(`RUNTIME ERROR:\n${error.message}\nCheck console.`, width / 2, height / 2); } else { document.body.innerHTML = `<pre style="color:red; font-family:monospace; font-size: 14px; padding: 10px; background: #222;">RUNTIME ERROR:\n${error.stack || error.message}\n\nPlease check the browser console.</pre>`; } } catch (e) { console.error("Error during error display:", e); if (!document.body.innerHTML.includes("RUNTIME ERROR")) { document.body.innerHTML = `<pre style="color:red; font-family:monospace; font-size: 14px; padding: 10px; background: #222;">RUNTIME ERROR:\n${error.stack || error.message}\n\nPlease check the browser console.</pre>`; } } if (typeof noLoop === 'function') { try { noLoop(); } catch (noLoopError) { console.error("Error calling noLoop():", noLoopError); } }
 }
