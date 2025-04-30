@@ -1,16 +1,17 @@
 try {
   // --- Game Tuning Variables ---
-  const INITIAL_MAX_HEALTH = 100;
+  const INITIAL_MAX_HEALTH = 100; 
   const HEALTH_REGEN_RATE = 0.04;
   const REGEN_DELAY_AFTER_HIT = 120;
   const BASE_DAMAGE_MULTIPLIER = 0.15;
   const POWERUP_SPAWN_CHANCE = 0.018;
   const POWERUP_HEALTH_CHANCE = 0.3;
   const POWERUP_SLOWMO_CHANCE = 0.15;
-  const POWERUP_MAX_HEALTH_CHANCE = 0.1;
-  const POWERUP_BOOST_FUEL_CHANCE = 0.15;
-  const POWERUP_MAX_WEAPON_ENERGY_CHANCE = 0.15;
-  const POWERUP_MISSILE_AMMO_CHANCE = 0.15;
+  const POWERUP_MAX_HEALTH_CHANCE = 0.08; 
+  const POWERUP_BOOST_FUEL_CHANCE = 0.15; 
+  const POWERUP_MAX_WEAPON_ENERGY_CHANCE = 0.15; 
+  const POWERUP_MISSILE_AMMO_CHANCE = 0.17; 
+  const MAX_HEALTH_INCREASE_AMOUNT = 20; 
   const MAX_WEAPON_ENERGY_INCREASE_AMOUNT = 20;
   const STAGE_SCORE_THRESHOLD = 300;
   const STAGE_HEAL_AMOUNT = 20;
@@ -48,10 +49,10 @@ try {
   const ENEMY_KILL_SCORE_LASER = 20;
   const ENEMY_KILL_SCORE_PULLER = 30;
   const UPGRADE_POINT_CONVERSION_RATE = 0.5;
-  const MAX_STREAK_TIME = 120; // <<< Reduced Streak Timer (2 seconds) >>>
+  const MAX_STREAK_TIME = 25;
   const STREAK_MULTIPLIER_INCREMENT = 0.5;
   const MAX_STREAK_MULTIPLIER = 5.0;
-  const STREAK_NOTIFICATION_DURATION = 90;
+  const STREAK_NOTIFICATION_DURATION = 15;
   const STREAK_PULSE_SPEED_FACTOR = 0.1;
   const STREAK_PULSE_AMP_FACTOR = 5;
 
@@ -94,6 +95,14 @@ try {
   // --- Upgrade System Data ---
   let upgradePoints = 0;
   let upgrades = {
+    maxHealth: {
+      name: "Max Health",
+      level: 0,
+      cost: 130,
+      baseCost: 130,
+      scale: 1.6,
+      effectPerLevel: 10,
+    },
     maxEnergy: {
       name: "Max Energy",
       level: 0,
@@ -164,7 +173,7 @@ try {
   };
   const upgradeKeys = Object.keys(upgrades);
 
-  // --- Player Object --- (No changes needed here for these requests)
+  // --- Player Class ---
   class Player {
     constructor() {
       this.x = width / 2;
@@ -190,7 +199,9 @@ try {
       this.boostColor = color(200, 80, 100);
     }
     resetStatsBasedOnUpgrades() {
-      this.maxHealth = INITIAL_MAX_HEALTH;
+      this.maxHealth =
+        INITIAL_MAX_HEALTH +
+        upgrades.maxHealth.level * upgrades.maxHealth.effectPerLevel;
       this.maxWeaponEnergy =
         INITIAL_MAX_WEAPON_ENERGY +
         upgrades.maxEnergy.level * upgrades.maxEnergy.effectPerLevel;
@@ -279,7 +290,7 @@ try {
     }
     draw(forceX = this.x, forceY = this.y) {
       let currentColor = this.baseColor;
-      if (this.damageFlashTimer > 0)
+      if (this.damageFlashTimer > 0 && gameState === "PLAYING")
         currentColor = lerpColor(
           this.baseColor,
           this.damageColor,
@@ -477,7 +488,7 @@ try {
         boostPickupFlashTimer = BOOST_PICKUP_FLASH_DURATION;
       }
     }
-    increaseMaxWeaponEnergy(amount) {
+    increaseCurrentWeaponEnergy(amount) {
       if (!isNaN(amount) && amount > 0) {
         this.weaponEnergy = min(
           this.weaponEnergy + amount,
@@ -495,9 +506,12 @@ try {
     }
     increaseMaxHealth(amount) {
       if (!isNaN(amount) && amount > 0) {
-        this.heal(amount);
+        this.maxHealth += amount;
+        this.heal(this.maxHealth);
+        healthPickupFlashTimer = HEALTH_PICKUP_FLASH_DURATION;
       }
     }
+
     checkPowerUpCollision(powerUpsToCheck) {
       if (!powerUpsToCheck) return;
       for (let i = powerUpsToCheck.length - 1; i >= 0; i--) {
@@ -541,18 +555,21 @@ try {
         }
       }
     }
+
     activatePowerUp(type) {
       if (type === "HEALTH_PACK") this.heal(INITIAL_MAX_HEALTH * 0.4);
       else if (type === "SLOW_MO") {
         slowMoActive = true;
         slowMoTimer = slowMoDuration;
-      } else if (type === "MAX_HEALTH_UP") this.heal(INITIAL_MAX_HEALTH * 0.2);
+      } else if (type === "MAX_HEALTH_UP")
+        this.increaseMaxHealth(MAX_HEALTH_INCREASE_AMOUNT);
       else if (type === "BOOST_FUEL") this.restoreBoost(BOOST_PICKUP_AMOUNT);
       else if (type === "MAX_WEAPON_ENERGY")
-        this.increaseMaxWeaponEnergy(MAX_WEAPON_ENERGY_INCREASE_AMOUNT);
+        this.increaseCurrentWeaponEnergy(MAX_WEAPON_ENERGY_INCREASE_AMOUNT);
       else if (type === "MISSILE_AMMO")
         this.addMissileAmmo(MISSILE_PICKUP_AMOUNT);
-    }
+    } // End activatePowerUp
+
     reset() {
       this.x = width / 2;
       this.y = height - 50;
@@ -576,7 +593,7 @@ try {
     }
   }
 
-  // --- Projectile Object --- (No changes needed)
+  // --- Projectile Class ---
   class Projectile {
     constructor(x, y, vx, vy, type, damage) {
       this.x = x;
@@ -726,7 +743,7 @@ try {
     }
   }
 
-  // --- Enemy Object --- (No changes needed)
+  // --- Enemy Class ---
   class Enemy {
     constructor(x, y, type) {
       this.x = x;
@@ -873,7 +890,7 @@ try {
     }
   }
 
-  // --- PowerUp Object --- (No changes needed)
+  // --- PowerUp Class ---
   class PowerUp {
     constructor(x, y, type) {
       this.x = x;
@@ -1068,7 +1085,7 @@ try {
     }
   }
 
-  // --- Draw Tunnel (Enhanced Streak Effects) ---
+  // --- Draw Tunnel ---
   function drawTunnel() {
     let currentMultiplier = max(1, streakMultiplier);
     let thickness = 3 + floor(currentMultiplier * 0.5);
@@ -1109,7 +1126,7 @@ try {
     }
   }
 
-  // --- Update World State (Streak starts at 3 kills) ---
+  // --- Update World State ---
   function updateWorld() {
     if (!player) return;
     let effectiveSpeed = currentSpeed * (slowMoActive ? 0.5 : 1);
@@ -1119,7 +1136,6 @@ try {
       if (streakTimer <= 0) resetStreak();
     }
     if (streakNotificationTimer > 0) streakNotificationTimer--;
-    // Update Tunnel & Score
     if (tunnel) {
       for (let i = tunnel.length - 1; i >= 0; i--) {
         let seg = tunnel[i];
@@ -1146,7 +1162,6 @@ try {
             : -segmentHeight
         );
     }
-    // Update Powerups
     if (powerUps)
       powerUps.forEach((pu, i) => {
         if (pu) {
@@ -1154,7 +1169,6 @@ try {
           if (pu.y > height + 20) powerUps.splice(i, 1);
         } else powerUps.splice(i, 1);
       });
-    // Update Enemies & Handle Kills
     if (enemies) {
       for (let i = enemies.length - 1; i >= 0; i--) {
         let enemy = enemies[i];
@@ -1167,13 +1181,11 @@ try {
           enemies.splice(i, 1);
         } else if (!enemy.isAlive()) {
           streakCount++;
-          // <<< Streak multiplier starts after kill #2 (when streakCount becomes 3) >>>
           streakMultiplier = min(
             MAX_STREAK_MULTIPLIER,
             1.0 + max(0, streakCount - 2) * STREAK_MULTIPLIER_INCREMENT
           );
           streakTimer = MAX_STREAK_TIME;
-          // <<< Streak notification starts at kill #3 >>>
           if (streakCount >= 3) {
             streakNotificationText = `Streak x${streakMultiplier.toFixed(1)}!`;
             streakNotificationTimer = STREAK_NOTIFICATION_DURATION;
@@ -1187,7 +1199,6 @@ try {
         }
       }
     }
-    // Update Projectiles & Collisions
     if (playerProjectiles) {
       for (let i = playerProjectiles.length - 1; i >= 0; i--) {
         let proj = playerProjectiles[i];
@@ -1241,14 +1252,12 @@ try {
         }
       }
     }
-    // Player Collisions
     if (player) {
       player.checkEnemyCollision(enemies);
       player.checkPowerUpCollision(powerUps);
       let wallDamage = player.calculateWallDamage(tunnel);
       if (wallDamage > 0) player.takeDamage(wallDamage, "WALL");
     }
-    // Speed Increase
     if (!slowMoActive) currentSpeed += speedIncrease;
     noiseOffset += noiseSpeed * (effectiveSpeed / baseSpeed);
   }
@@ -1258,8 +1267,8 @@ try {
     streakCount = 0;
     streakMultiplier = 1.0;
     streakTimer = 0;
-    streakNotificationTimer = min(streakNotificationTimer, 15); // Fast fade
-    streakNotificationText = ""; // Clear text
+    streakNotificationTimer = min(streakNotificationTimer, 15);
+    streakNotificationText = "";
   }
 
   // --- Draw All Game Elements ---
@@ -1410,8 +1419,6 @@ try {
     );
     textAlign(RIGHT, TOP);
     text(`POINTS: ${upgradePoints}`, width - 20, 20);
-
-    // Streak Display (Only show when streak is actually active, i.e., count >= 3)
     if (streakCount >= 3 && streakTimer > 0) {
       let streakHue = map(streakMultiplier, 1, MAX_STREAK_MULTIPLIER, 60, 0);
       let streakSize = 20 + streakMultiplier * 1.5;
@@ -1437,7 +1444,6 @@ try {
         2
       );
     }
-    // Streak Notification
     if (streakNotificationTimer > 0 && streakNotificationText) {
       textAlign(CENTER, CENTER);
       let alpha = map(
@@ -1462,7 +1468,6 @@ try {
       textSize(28 + streakMultiplier * 2);
       text(streakNotificationText, width / 2, height * 0.2);
     }
-
     if (slowMoActive) {
       fill(270, 80, 90);
       textSize(18);
@@ -1527,7 +1532,7 @@ try {
     text("Shift          : Boost", controlX, controlY);
     controlY += 25;
     text("Spacebar       : Fire Laser", controlX, controlY);
-    controlY += 25; // Updated key
+    controlY += 25;
     text("M              : Fire Missile", controlX, controlY);
     controlY += 25;
     textAlign(CENTER, CENTER);
@@ -1538,7 +1543,7 @@ try {
       height * 0.8
     );
     textSize(24);
-    text("Press ENTER to Start", width / 2, height * 0.9); // Updated key
+    text("Press ENTER to Start", width / 2, height * 0.9);
   }
 
   // --- Draw Game Over Screen ---
@@ -1566,7 +1571,7 @@ try {
       "Press ENTER to Restart (without upgrading)",
       width / 2,
       height / 2 + 120
-    ); // Updated key
+    );
   }
 
   // --- Draw Upgrade Screen ---
@@ -1579,8 +1584,9 @@ try {
     text("SHIP UPGRADES", width / 2, 50);
     textSize(24);
     text(`Available Points: ${upgradePoints}`, width / 2, 100);
-    let startY = 150;
-    let spacingY = 55;
+    let startY = 140;
+    let spacingY = (height - startY - 100) / upgradeKeys.length;
+    spacingY = min(spacingY, 60);
     let startX = width * 0.1;
     let colWidth = width * 0.8;
     let textX = startX + 20;
@@ -1598,7 +1604,8 @@ try {
       fill(0, 0, 100);
       text(`(${i + 1}) ${upg.name} [Lv ${upg.level}]`, textX, currentY);
       let baseValue = 0;
-      if (key === "maxEnergy") baseValue = INITIAL_MAX_WEAPON_ENERGY;
+      if (key === "maxHealth") baseValue = INITIAL_MAX_HEALTH;
+      else if (key === "maxEnergy") baseValue = INITIAL_MAX_WEAPON_ENERGY;
       else if (key === "maxAmmo") baseValue = INITIAL_MISSILE_AMMO;
       else if (key === "laserDamage") baseValue = LASER_CANNON_DAMAGE;
       else if (key === "missileDamage") baseValue = MISSILE_DAMAGE;
@@ -1619,6 +1626,8 @@ try {
       if (key === "laserSpread") effectStr = `Lasers Fired: ${totalValue}`;
       if (key === "maxAmmo" && totalValue >= MAX_MISSILE_AMMO_CAP)
         effectStr += " (Max Cap)";
+      if (key === "maxHealth")
+        effectStr = `Starting Health: ${totalValue.toFixed(0)}`;
       text(effectStr, textX + 300, currentY);
       let costX = startX + colWidth - 180;
       if (maxLevelReached) {
@@ -1633,7 +1642,7 @@ try {
     textAlign(CENTER, CENTER);
     textSize(20);
     text(
-      "Press number keys (1-8) to purchase upgrades.",
+      "Press number keys (1-9) to purchase upgrades.",
       width / 2,
       height - 70
     );
@@ -1641,7 +1650,7 @@ try {
       "Press 'B' to go Back or ENTER to Start New Game",
       width / 2,
       height - 40
-    ); // Updated key
+    );
   }
 
   // --- Main Draw Loop ---
@@ -1662,27 +1671,26 @@ try {
     }
   }
 
-  // --- Input Handling (Updated Keys) ---
+  // --- Input Handling ---
   function keyPressed() {
     if (gameState === "PLAYING") {
       if (keyCode === 32) {
         if (player) player.fireLaser();
-      } // SPACEBAR for Laser
+      } // SPACEBAR
       else if (keyCode === 77) {
         if (player) player.fireMissile();
-      } // M for Missile
+      } // M
     } else if (gameState === "START") {
       if (keyCode === ENTER) {
         resetGame();
         gameState = "PLAYING";
-      } // ENTER to Start
+      }
     } else if (gameState === "GAME_OVER") {
       if (keyCode === ENTER) {
         resetGame();
         gameState = "PLAYING";
-      } // ENTER to Restart
-      else if (keyCode === 85) {
-        // U to Upgrade
+      } else if (keyCode === 85) {
+        // U
         let pointsEarned = floor(lastScore * UPGRADE_POINT_CONVERSION_RATE);
         upgradePoints += pointsEarned;
         lastScore = 0;
@@ -1691,16 +1699,14 @@ try {
     } else if (gameState === "UPGRADE") {
       if (keyCode === 66) {
         gameState = "START";
-      } // B to go Back to Start
+      } // B
       else if (keyCode === ENTER) {
         resetGame();
         gameState = "PLAYING";
-      } // ENTER to Start New Game
-      else {
-        // Check number keys for purchasing upgrades
+      } else {
         let upgradeIndex = -1;
-        if (keyCode >= 49 && keyCode <= 56) upgradeIndex = keyCode - 49; // 1-8
-        else if (keyCode >= 97 && keyCode <= 104) upgradeIndex = keyCode - 97; // Numpad 1-8
+        if (keyCode >= 49 && keyCode <= 57) upgradeIndex = keyCode - 49; // 1-9
+        else if (keyCode >= 97 && keyCode <= 105) upgradeIndex = keyCode - 97; // Numpad 1-9
         if (upgradeIndex >= 0 && upgradeIndex < upgradeKeys.length) {
           let key = upgradeKeys[upgradeIndex];
           let upg = upgrades[key];
@@ -1711,7 +1717,7 @@ try {
             upg.level++;
             upg.cost = floor(upg.baseCost * pow(upg.scale, upg.level));
             if (player && player.resetStatsBasedOnUpgrades)
-              player.resetStatsBasedOnUpgrades(); // Update player for start screen view
+              player.resetStatsBasedOnUpgrades();
           }
         }
       }
