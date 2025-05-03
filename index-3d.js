@@ -1,13 +1,12 @@
-// <<< p5.js WEBGL VERSION - Consistent HUD Usage Fix >>>
+// <<< p5.js WEBGL VERSION - Radar Position, Reverted Lasers, Ambient Light >>>
 
 // Ensure p5.EasyCam is loaded. Use createEasyCam()
 
 // --- Game Tuning Variables ---
-// ... (Keep all tuning variables as they were) ...
 const INITIAL_MAX_HEALTH = 100;
 const HEALTH_REGEN_RATE = 0.04;
 const REGEN_DELAY_AFTER_HIT = 120;
-const POWERUP_SPAWN_CHANCE = 0.025;
+const POWERUP_SPAWN_CHANCE = 0.05;
 const POWERUP_HEALTH_CHANCE = 0.3;
 const POWERUP_SLOWMO_CHANCE = 0.15;
 const POWERUP_MAX_HEALTH_CHANCE = 0.08;
@@ -29,7 +28,7 @@ const WEAPON_ENERGY_REGEN_RATE = 0.5;
 const WEAPON_ENERGY_REGEN_DELAY = 60;
 const LASER_CANNON_COST = 15;
 const LASER_CANNON_DAMAGE = 25;
-const LASER_CANNON_SPEED = 15;
+const LASER_CANNON_SPEED = 18;
 const INITIAL_MISSILE_AMMO = 3;
 const MAX_MISSILE_AMMO_CAP = 20;
 const MISSILE_PICKUP_AMOUNT = 2;
@@ -41,8 +40,8 @@ const MISSILE_MAX_STEER_FORCE = 0.4;
 const ENEMY_SPAWN_CHANCE = 0.06;
 const ENEMY_BASE_SPEED_Z = 2.5;
 const LASER_ENEMY_HEALTH = 50;
-const LASER_ENEMY_SHOOT_INTERVAL = 100;
-const LASER_ENEMY_PROJECTILE_SPEED = 12;
+const LASER_ENEMY_SHOOT_INTERVAL = 110;
+const LASER_ENEMY_PROJECTILE_SPEED = 9;
 const LASER_ENEMY_PROJECTILE_DAMAGE = 10;
 const PULLER_ENEMY_HEALTH = 80;
 const PULLER_ENEMY_FORCE_MULTIPLIER = 15;
@@ -60,6 +59,8 @@ const STREAK_NOTIFICATION_DURATION = 90;
 const STREAK_PULSE_SPEED_FACTOR = 0.1;
 const STREAK_PULSE_AMP_FACTOR = 10;
 const SPEED_INCREASE_RATE = 0.0005;
+const PLAYER_ROLL_SPEED = 0.04;
+const PLAYER_ROLL_DAMPING = 0.92;
 
 // --- 3D Specific ---
 const PLAYER_Z_OFFSET = -150;
@@ -74,6 +75,17 @@ const TUNNEL_VISIBLE_LENGTH = 3000;
 const TUNNEL_CENTER_DRIFT_SCALE = 150;
 const TUNNEL_NOISE_SCALE_POS = 0.001;
 const BASE_WORLD_SPEED_Z = 3.0;
+const HEALTH_PICKUP_FLASH_DURATION = 30;
+const BOOST_PICKUP_FLASH_DURATION = 30;
+const MAX_WEAPON_ENERGY_PICKUP_FLASH_DURATION = 30;
+const MISSILE_AMMO_PICKUP_FLASH_DURATION = 30;
+
+// --- UI / Debug ---
+// Radar position is now calculated in drawRadar based on width/height
+const RADAR_RADIUS = 75;
+const RADAR_RANGE_Z = TUNNEL_VISIBLE_LENGTH;
+const RADAR_SCALE_FACTOR = RADAR_RADIUS / (TUNNEL_RADIUS * 1.5);
+let showDebug = false;
 
 // --- Global Variables ---
 let player;
@@ -93,13 +105,13 @@ let slowMoActive = false;
 let slowMoDuration = 300;
 let slowMoTimer = 0;
 let healthPickupFlashTimer = 0;
-const HEALTH_PICKUP_FLASH_DURATION = 30;
+
 let boostPickupFlashTimer = 0;
-const BOOST_PICKUP_FLASH_DURATION = 30;
+
 let maxWeaponEnergyPickupFlashTimer = 0;
-const MAX_WEAPON_ENERGY_PICKUP_FLASH_DURATION = 30;
+
 let missileAmmoPickupFlashTimer = 0;
-const MISSILE_AMMO_PICKUP_FLASH_DURATION = 30;
+
 let streakCount = 0;
 let streakMultiplier = 1.0;
 let streakTimer = 0;
@@ -189,6 +201,16 @@ let easycam;
 let easycamTarget;
 let currentFont;
 
+// --- Helper Function for Vector Rotation ---
+function rotateVectorZ(vector, angle) {
+  let v = vector.copy();
+  let cosA = cos(angle);
+  let sinA = sin(angle);
+  let newX = v.x * cosA - v.y * sinA;
+  let newY = v.x * sinA + v.y * cosA;
+  return createVector(newX, newY, v.z);
+}
+
 // --- Font Preload ---
 function preload() {
   currentFont = loadFont(
@@ -198,11 +220,12 @@ function preload() {
     },
     (err) => {
       console.error("Font loading failed:", err);
+      currentFont = "monospace";
     }
   );
 }
 
-// --- Player Class (No changes needed) ---
+// --- Player Class --- (Reverted fireLaser, roll logic unchanged)
 class Player {
   constructor() {
     this.basePos = createVector(0, 0, PLAYER_Z_OFFSET);
@@ -211,6 +234,7 @@ class Player {
     this.baseMoveSpeed = 6.5;
     this.velocity = createVector(0, 0, 0);
     this.externalForce = createVector(0, 0, 0);
+    this.rollAngle = 0;
     this.resetStatsBasedOnUpgrades();
     this.health = this.maxHealth;
     this.boosterFuel = this.maxBoosterFuel;
@@ -223,7 +247,7 @@ class Player {
     this.damageFlashTimer = 0;
     this.damageFlashDuration = 15;
     this.isBoosting = false;
-    this.baseColor = color(0, 0, 100);
+    this.baseColor = color(60, 80, 100);
     this.damageColor = color(0, 90, 100);
     this.boostColor = color(200, 80, 100);
     this.wallCollisionTimer = 0;
@@ -290,6 +314,10 @@ class Player {
     }
     let moveLeft = keyIsDown(LEFT_ARROW) || keyIsDown(65);
     let moveRight = keyIsDown(RIGHT_ARROW) || keyIsDown(68);
+    let moveUp = keyIsDown(UP_ARROW) || keyIsDown(87);
+    let moveDown = keyIsDown(DOWN_ARROW) || keyIsDown(83);
+    let rollLeft = keyIsDown(81);
+    let rollRight = keyIsDown(69);
     let boostKey = keyIsDown(SHIFT);
     if (boostKey && this.boosterFuel > 0) {
       this.isBoosting = true;
@@ -308,6 +336,18 @@ class Player {
     let moveIntent = createVector(0, 0, 0);
     if (moveLeft) moveIntent.x -= currentFrameMoveSpeed;
     if (moveRight) moveIntent.x += currentFrameMoveSpeed;
+    if (moveUp) moveIntent.y += currentFrameMoveSpeed;
+    if (moveDown) moveIntent.y -= currentFrameMoveSpeed;
+
+    // --- Roll Update (Accumulative) ---
+    if (rollLeft)
+      this.rollAngle += PLAYER_ROLL_SPEED * (slowMoActive ? 0.5 : 1);
+    if (rollRight)
+      this.rollAngle -= PLAYER_ROLL_SPEED * (slowMoActive ? 0.5 : 1);
+    // Keep angle within -PI to PI for numerical stability, though visually it wraps
+    if (this.rollAngle > Math.PI) this.rollAngle -= TWO_PI;
+    if (this.rollAngle < -Math.PI) this.rollAngle += TWO_PI;
+
     this.velocity.set(moveIntent);
     this.velocity.add(this.externalForce);
     this.pos.add(this.velocity);
@@ -340,8 +380,9 @@ class Player {
     let closestZ = Infinity;
     let collidingSegmentCenter = null;
     for (let seg of tunnel) {
-      if (abs(seg.z - this.pos.z) < closestZ) {
-        closestZ = abs(seg.z - this.pos.z);
+      let dz = abs(seg.z - this.pos.z);
+      if (dz < closestZ) {
+        closestZ = dz;
         collidingSegmentCenter = seg.center;
       }
     }
@@ -349,100 +390,115 @@ class Player {
       let distSqFromCenter =
         pow(this.pos.x - collidingSegmentCenter.x, 2) +
         pow(this.pos.y - collidingSegmentCenter.y, 2);
-      if (distSqFromCenter > pow(TUNNEL_RADIUS - this.size.x * 0.5, 2)) {
+      let collisionRadius = TUNNEL_RADIUS - max(this.size.x, this.size.y) * 0.5;
+      if (distSqFromCenter > pow(collisionRadius, 2)) {
         this.wallCollisionTimer = 2;
         this.damageFlashTimer = this.damageFlashDuration;
         let angle = atan2(
           this.pos.y - collidingSegmentCenter.y,
           this.pos.x - collidingSegmentCenter.x
         );
-        let constrainedRadius = TUNNEL_RADIUS - this.size.x * 0.5;
-        this.pos.x = collidingSegmentCenter.x + cos(angle) * constrainedRadius;
-        this.pos.y = collidingSegmentCenter.y + sin(angle) * constrainedRadius;
+        this.pos.x = collidingSegmentCenter.x + cos(angle) * collisionRadius;
+        this.pos.y = collidingSegmentCenter.y + sin(angle) * collisionRadius;
       }
     }
   }
   draw(drawPosX = this.pos.x, drawPosY = this.pos.y, drawPosZ = this.pos.z) {
-    let currentColor = this.baseColor;
-    if (this.damageFlashTimer > 0 && gameState === "PLAYING")
-      currentColor = lerpColor(
+    let displayColor = this.baseColor;
+    if (this.damageFlashTimer > 0 && gameState === "PLAYING") {
+      displayColor = lerpColor(
         this.baseColor,
         this.damageColor,
         this.damageFlashTimer / this.damageFlashDuration
       );
-    else if (this.isBoosting && gameState === "PLAYING")
-      currentColor = lerpColor(
+    } else if (this.isBoosting && gameState === "PLAYING") {
+      displayColor = lerpColor(
         this.baseColor,
         this.boostColor,
         0.7 + sin(frameCount * 0.5) * 0.3
       );
+    }
     push();
     translate(drawPosX, drawPosY, drawPosZ);
-    specularMaterial(currentColor);
-    shininess(15);
-    noStroke();
+    rotateZ(this.rollAngle);
+    stroke('white');
+    strokeWeight(0.5);
+    specularMaterial(displayColor);
+    shininess(20);
+    let bodyW = this.size.x * 0.8;
+    let bodyH = this.size.y * 0.9;
+    let bodyD = this.size.z;
+    let wingW = this.size.x * 1.5;
+    let wingH = this.size.y * 0.2;
+    let wingD = this.size.z * 0.6;
+    let tailH = this.size.y * 0.7;
+    let tailD = this.size.z * 0.4;
+    beginShape(TRIANGLES);
+    vertex(-bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(0, bodyH / 2, -bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(0, bodyH / 2, -bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(0, bodyH / 2, bodyD / 2);
+    vertex(0, bodyH / 2, -bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, -bodyD / 2);
+    vertex(0, bodyH / 2, -bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(0, bodyH / 2, -bodyD / 2);
+    vertex(0, bodyH / 2, bodyD / 2);
+    vertex(-bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(bodyW / 2, -bodyH / 2, bodyD / 2);
+    vertex(0, bodyH / 2, bodyD / 2);
+    endShape();
+    push();
+    translate(0, (-bodyH / 2) * 0.8, bodyD * 0.1);
+    box(wingW, wingH, wingD);
+    pop();
+    push();
+    translate(0, tailH / 2 - bodyH / 2, bodyD * 0.3);
+    box(wingH, tailH, tailD);
+    pop();
+    let cannonColor = lerpColor(displayColor, color(0, 0, 60), 0.5);
+    let glowColor = lerpColor(color(60, 80, 100), this.baseColor, 0.3);
     let w = this.size.x / 2;
     let h = this.size.y / 2;
     let d = this.size.z / 2;
-    box(this.size.x, this.size.y, this.size.z);
-    let wingColor = lerpColor(currentColor, color(0, 0, 80), 0.3);
-    let cannonColor = lerpColor(currentColor, color(0, 0, 60), 0.5);
-    let glowColor = lerpColor(currentColor, color(60, 80, 100), 0.4);
-    let wingWidth = this.size.x * 0.3;
-    let wingHeight = this.size.y * 0.8;
-    let wingDepth = this.size.z * 0.5;
     push();
-    noStroke();
-    if (this.laserSpreadLevel > 0) {
-      specularMaterial(wingColor);
-      push();
-      translate(-w - wingWidth / 2, 0, 0);
-      box(wingWidth, wingHeight, wingDepth);
-      pop();
-      push();
-      translate(w + wingWidth / 2, 0, 0);
-      box(wingWidth, wingHeight, wingDepth);
-      pop();
-    }
-    if (this.laserSpreadLevel > 1) {
-      specularMaterial(wingColor);
-      push();
-      translate(-w * 1.8, 0, -d * 0.2);
-      rotateZ(PI / 6);
-      box(w * 0.4, h * 1.8, d * 0.8);
-      pop();
-      push();
-      translate(w * 1.8, 0, -d * 0.2);
-      rotateZ(-PI / 6);
-      box(w * 0.4, h * 1.8, d * 0.8);
-      pop();
-    }
-    if (this.laserSpreadLevel > 2) {
+    if (this.laserSpreadLevel >= 2) {
       specularMaterial(cannonColor);
       push();
-      translate(-w * 2.2, h * 0.6, d * 0.5);
-      rotateX(PI / 2);
-      cylinder(w * 0.2, d * 0.6);
+      translate(wingW * 0.4, (-bodyH / 2) * 0.8, bodyD * 0.1 - wingD * 0.4);
+      rotateX(Math.PI / 2);
+      cylinder(w * 0.15, d * 0.5);
       pop();
       push();
-      translate(w * 2.2, h * 0.6, d * 0.5);
-      rotateX(PI / 2);
-      cylinder(w * 0.2, d * 0.6);
+      translate(-wingW * 0.4, (-bodyH / 2) * 0.8, bodyD * 0.1 - wingD * 0.4);
+      rotateX(Math.PI / 2);
+      cylinder(w * 0.15, d * 0.5);
       pop();
     }
-    if (this.laserSpreadLevel > 3) {
+    if (this.laserSpreadLevel >= 3) {
       emissiveMaterial(glowColor);
       push();
-      translate(0, -h * 1.2, 0);
-      sphere(w * 0.15);
-      pop();
-      push();
-      translate(-w * 1.8, -h * 0.5, -d * 0.2);
+      translate(0, tailH / 2 - bodyH / 2, bodyD * 0.3 + tailD * 0.5);
       sphere(w * 0.1);
       pop();
       push();
-      translate(w * 1.8, -h * 0.5, -d * 0.2);
-      sphere(w * 0.1);
+      translate(wingW * 0.45, (-bodyH / 2) * 0.8, bodyD * 0.1);
+      sphere(w * 0.08);
+      pop();
+      push();
+      translate(-wingW * 0.45, (-bodyH / 2) * 0.8, bodyD * 0.1);
+      sphere(w * 0.08);
       pop();
     }
     if (this.isBoosting && gameState === "PLAYING") {
@@ -450,50 +506,59 @@ class Player {
         this.boostColor.levels[0],
         this.boostColor.levels[1],
         this.boostColor.levels[2],
-        150 + random(-30, 30)
+        180 + random(-40, 40)
       );
       push();
-      translate(0, 0, -d * 1.5);
-      rotateX(PI / 2);
-      cone(w * 0.8, d * 3 + random(-d, d), 16, 1, false);
+      translate(0, 0, bodyD * 0.6);
+      rotateX(Math.PI / 2);
+      cone(bodyW * 0.5, bodyD * 2 + random(-d, d), 16, 1, false);
       pop();
     }
     pop();
     pop();
   }
   fireLaser() {
+    // Reverted to original forward + spread logic
     if (this.weaponEnergy >= this.weaponCost) {
       this.weaponEnergy -= this.weaponCost;
       this.weaponEnergyRegenDelayTimer = this.weaponEnergyRegenDelayDuration;
       let numLasers = 1 + this.laserSpreadLevel * 2;
-      let spreadAngleXY = PI / 24;
-      if (playerProjectiles) {
-        for (let i = 0; i < numLasers; i++) {
-          let angle =
-            numLasers === 1
-              ? 0
-              : map(
-                  i,
-                  0,
-                  numLasers - 1,
-                  (-spreadAngleXY * (numLasers - 1)) / 2,
-                  (spreadAngleXY * (numLasers - 1)) / 2
-                );
-          let vx = sin(angle) * this.weaponProjectileSpeed * 0.5;
-          let vy = 0;
-          let vz = cos(angle) * this.weaponProjectileSpeed;
-          let spawnPos = this.pos
-            .copy()
-            .add(vx * 2, vy * 2, this.size.z / 2 + 5);
-          playerProjectiles.push(
-            new Projectile(
-              spawnPos,
-              createVector(vx, vy, vz),
-              "PLAYER_LASER",
-              this.weaponDamage
-            )
-          );
-        }
+      let spreadAngleXY = Math.PI / 24; // Original spread angle
+
+      for (let i = 0; i < numLasers; i++) {
+        let angle =
+          numLasers === 1
+            ? 0
+            : map(
+                i,
+                0,
+                numLasers - 1,
+                (-spreadAngleXY * (numLasers - 1)) / 2,
+                (spreadAngleXY * (numLasers - 1)) / 2
+              );
+        // Base velocity components based on spread angle
+        let vx_base = sin(angle) * this.weaponProjectileSpeed * 0.5;
+        let vy_base = 0; // Spread is horizontal initially
+        let vz_base = cos(angle) * this.weaponProjectileSpeed;
+        let baseVel = createVector(vx_base, vy_base, vz_base)
+          .normalize()
+          .mult(this.weaponProjectileSpeed);
+
+        // Rotate velocity by player's roll
+        let laserVel = rotateVectorZ(baseVel, this.rollAngle);
+
+        // Calculate spawn position (offset slightly and rotated)
+        let spawnOffsetBase = createVector(
+          sin(angle) * this.size.x * 0.3,
+          0,
+          this.size.z / 2 + 5
+        );
+        let spawnOffsetRotated = rotateVectorZ(spawnOffsetBase, this.rollAngle);
+        let spawnPos = p5.Vector.add(this.pos, spawnOffsetRotated);
+
+        playerProjectiles.push(
+          new Projectile(spawnPos, laserVel, "PLAYER_LASER", this.weaponDamage)
+        );
       }
     }
   }
@@ -501,20 +566,23 @@ class Player {
     if (this.missileAmmo > 0 && this.missileFireTimer <= 0) {
       this.missileAmmo--;
       this.missileFireTimer = this.missileFireCooldown;
-      if (playerProjectiles) {
-        let spawnPos = this.pos
-          .copy()
-          .add(0, -this.size.y * 0.3, this.size.z / 2 + 10);
-        let initialVel = createVector(0, 0, MISSILE_SPEED);
-        playerProjectiles.push(
-          new Projectile(
-            spawnPos,
-            initialVel,
-            "PLAYER_MISSILE",
-            this.missileDamage
-          )
-        );
-      }
+      let spawnOffsetBase = createVector(
+        0,
+        -this.size.y * 0.3,
+        this.size.z / 2 + 10
+      );
+      let spawnOffsetRotated = rotateVectorZ(spawnOffsetBase, this.rollAngle);
+      let spawnPos = this.pos.copy().add(spawnOffsetRotated);
+      let initialVelBase = createVector(0, 0, MISSILE_SPEED);
+      let initialVelRotated = rotateVectorZ(initialVelBase, this.rollAngle);
+      playerProjectiles.push(
+        new Projectile(
+          spawnPos,
+          initialVelRotated,
+          "PLAYER_MISSILE",
+          this.missileDamage
+        )
+      );
     }
   }
   takeDamage(amount, source) {
@@ -539,7 +607,9 @@ class Player {
       (this.pos.x - other.pos.x) ** 2 +
       (this.pos.y - other.pos.y) ** 2 +
       (this.pos.z - other.pos.z) ** 2;
-    let collisionThresholdSq = pow(this.size.x * 0.5 + other.size.x * 0.5, 2);
+    let r1 = max(this.size.x, this.size.y) * 0.5;
+    let r2 = max(other.size.x, other.size.y) * 0.5;
+    let collisionThresholdSq = pow(r1 + r2, 2);
     return dSq < collisionThresholdSq;
   }
   heal(amount) {
@@ -602,6 +672,7 @@ class Player {
     this.damageFlashTimer = 0;
     this.isBoosting = false;
     this.wallCollisionTimer = 0;
+    this.rollAngle = 0;
     slowMoActive = false;
     slowMoTimer = 0;
     healthPickupFlashTimer = 0;
@@ -617,7 +688,7 @@ class Player {
   }
 }
 
-// --- Projectile Class (No changes needed) ---
+// --- Projectile Class ---
 class Projectile {
   constructor(posVec, velVec, type, damage) {
     this.pos = posVec.copy();
@@ -628,13 +699,10 @@ class Projectile {
       type === "PLAYER_LASER" || type === "ENEMY_LASER"
         ? createVector(3, 3, 15)
         : createVector(8, 8, 12);
-    this.color =
-      type === "PLAYER_LASER"
-        ? color(150, 80, 100)
-        : type === "ENEMY_LASER"
-        ? color(30, 90, 100)
-        : color(0, 0, 100);
-    this.color.levels[3] = 200;
+    if (type === "PLAYER_LASER") this.color = color(170, 90, 100);
+    else if (type === "ENEMY_LASER") this.color = color(0, 90, 100);
+    else if (type === "PLAYER_MISSILE") this.color = color(30, 80, 100);
+    else this.color = color(0, 0, 50);
     if (type === "PLAYER_MISSILE") {
       this.trail = [];
       this.trailLength = 15;
@@ -642,6 +710,7 @@ class Projectile {
       this.maxSpeed = MISSILE_SPEED;
       this.maxForce = MISSILE_MAX_STEER_FORCE;
       this.vel.limit(this.maxSpeed);
+      this.flameColor = color(35, 95, 100);
     }
   }
   findTarget() {
@@ -696,7 +765,7 @@ class Projectile {
     if (this.type === "PLAYER_MISSILE") {
       push();
       strokeWeight(2);
-      stroke(25, 90, 90, 150);
+      stroke(this.flameColor.levels[0], this.flameColor.levels[1], 80, 80);
       noFill();
       beginShape();
       for (let v of this.trail)
@@ -710,15 +779,13 @@ class Projectile {
       if (rotAxis.magSq() > 0.0001) {
         rotate(rotAngle, rotAxis);
       } else if (this.vel.z < 0) {
-        rotate(PI, 0, 1, 0);
+        rotate(Math.PI, 0, 1, 0);
       }
       specularMaterial(this.color);
       shininess(10);
-      stroke(60, 80, 100);
-      strokeWeight(0.5);
       box(this.size.x, this.size.y, this.size.z);
       noStroke();
-      emissiveMaterial(30, 90, 100, 180 + random(-20, 20));
+      emissiveMaterial(this.flameColor);
       push();
       translate(0, 0, -this.size.z * 0.7);
       cone(this.size.x * 0.6, this.size.z * 1.5 + random(-5, 5), 8, 1, false);
@@ -746,37 +813,49 @@ class Projectile {
       (this.pos.x - target.pos.x) ** 2 +
       (this.pos.y - target.pos.y) ** 2 +
       (this.pos.z - target.pos.z) ** 2;
-    let collisionThresholdSq = pow(this.size.z * 0.5 + target.size.z * 0.5, 2);
+    let r1 = this.size.z * 0.5;
+    let r2 = max(target.size.x, target.size.y, target.size.z) * 0.5;
+    let collisionThresholdSq = pow(r1 + r2, 2);
     return dSq < collisionThresholdSq;
   }
 }
 
-// --- Enemy Class (No changes needed) ---
+// --- Enemy Class ---
 class Enemy {
   constructor(x, y, z, type) {
     this.pos = createVector(x, y, z);
     this.type = type;
     this.speedZ = ENEMY_BASE_SPEED_Z * random(0.9, 1.1);
-    this.size =
-      type === "LASER" ? createVector(25, 25, 35) : createVector(35, 35, 35);
     this.hitTimer = 0;
     this.hitDuration = 10;
     this.vel = createVector(0, 0, 0);
+    this.hitColor = color(0, 0, 100);
     if (type === "LASER") {
       this.health = LASER_ENEMY_HEALTH;
       this.maxHealth = LASER_ENEMY_HEALTH;
+      this.size = createVector(25, 25, 35);
       this.baseColor = color(0, 70, 70);
       this.shootCooldown = LASER_ENEMY_SHOOT_INTERVAL;
       this.shootTimer = random(this.shootCooldown);
     } else if (type === "PULLER") {
       this.health = PULLER_ENEMY_HEALTH;
       this.maxHealth = PULLER_ENEMY_HEALTH;
+      this.size = createVector(35, 35, 35);
       this.baseColor = color(270, 70, 60);
       this.pullForce = PULLER_ENEMY_FORCE_MULTIPLIER;
       this.pulseTimer = random(TWO_PI);
+      this.coreColor = color(270, 90, 90);
+      this.orbiters = [];
+      for (let i = 0; i < 5; i++)
+        this.orbiters.push({
+          angle: random(TWO_PI),
+          dist: this.size.x * (0.6 + random(0.4)),
+          speed: random(0.02, 0.05),
+        });
     } else {
       this.health = 1;
       this.maxHealth = 1;
+      this.size = createVector(20, 20, 20);
       this.baseColor = color(0, 0, 50);
     }
   }
@@ -785,14 +864,15 @@ class Enemy {
     this.pos.z -= this.speedZ * speedFactor;
     if (this.type === "LASER") {
       this.shootTimer -= speedFactor;
-      if (this.shootTimer <= 0) {
-        this.shoot(playerPos);
+      if (this.shootTimer <= 0 && player) {
+        this.shoot(player.pos);
         this.shootTimer = this.shootCooldown;
       }
       this.pos.x +=
         sin(frameCount * 0.05 + this.pos.z * 0.01) * 0.5 * speedFactor;
     } else if (this.type === "PULLER") {
       this.pulseTimer += 0.05 * speedFactor;
+      this.orbiters.forEach((o) => (o.angle += o.speed * speedFactor));
     }
     if (this.hitTimer > 0) this.hitTimer--;
   }
@@ -812,7 +892,7 @@ class Enemy {
     }
   }
   calculatePull(playerPosVec) {
-    if (!playerPosVec) return createVector(0, 0);
+    if (!playerPosVec || this.type !== "PULLER") return createVector(0, 0);
     let dir = p5.Vector.sub(this.pos, playerPosVec);
     let dSq = dir.magSq();
     if (dSq < PULLER_ENEMY_MIN_DIST_SQ) dSq = PULLER_ENEMY_MIN_DIST_SQ;
@@ -839,43 +919,77 @@ class Enemy {
     if (this.hitTimer > 0)
       displayColor = lerpColor(
         this.baseColor,
-        color(0, 0, 100),
+        this.hitColor,
         this.hitTimer / this.hitDuration
       );
     noStroke();
-    specularMaterial(displayColor);
-    shininess(10);
     if (this.type === "LASER") {
+      specularMaterial(displayColor);
+      shininess(15);
+      let w = this.size.x * 0.6;
+      let h = this.size.y * 0.7;
+      let d = this.size.z;
+      beginShape(TRIANGLES);
+      vertex(0, h / 2, -d / 2);
+      vertex(-w / 2, -h / 2, d * 0.1);
+      vertex(w / 2, -h / 2, d * 0.1);
+      vertex(0, h / 2, -d / 2);
+      vertex(w, -h / 2, d / 2);
+      vertex(w / 2, -h / 2, d * 0.1);
+      vertex(0, h / 2, -d / 2);
+      vertex(-w / 2, -h / 2, d * 0.1);
+      vertex(-w, -h / 2, d / 2);
+      vertex(-w / 2, -h / 2, d * 0.1);
+      vertex(w / 2, -h / 2, d * 0.1);
+      vertex(0, -h * 0.8, d * 0.3);
+      vertex(w / 2, -h / 2, d * 0.1);
+      vertex(w, -h / 2, d / 2);
+      vertex(0, -h * 0.8, d * 0.3);
+      vertex(-w, -h / 2, d / 2);
+      vertex(-w / 2, -h / 2, d * 0.1);
+      vertex(0, -h * 0.8, d * 0.3);
+      vertex(w, -h / 2, d / 2);
+      vertex(-w, -h / 2, d / 2);
+      vertex(0, -h * 0.8, d * 0.3);
+      endShape();
       push();
-      rotateX(PI);
-      cone(this.size.x * 0.5, this.size.z, 16, 1, false);
-      pop();
-      push();
-      translate(-this.size.x * 0.3, 0, 0);
-      box(this.size.x * 0.2, this.size.y * 0.8, this.size.z * 0.3);
-      pop();
-      push();
-      translate(this.size.x * 0.3, 0, 0);
-      box(this.size.x * 0.2, this.size.y * 0.8, this.size.z * 0.3);
+      emissiveMaterial(0, 90, 100);
+      translate(0, -h * 0.4, d * 0.35);
+      sphere(w * 0.15);
       pop();
     } else if (this.type === "PULLER") {
       let pulseScale = 1 + sin(this.pulseTimer) * 0.15;
+      specularMaterial(displayColor);
+      shininess(5);
       sphere(this.size.x * 0.5 * pulseScale);
       push();
-      specularMaterial(0, 0, 10);
+      emissiveMaterial(this.coreColor);
       sphere(this.size.x * 0.2 * pulseScale);
       pop();
+      push();
+      specularMaterial(lerpColor(displayColor, color(0, 0, 80), 0.5));
+      for (let o of this.orbiters) {
+        push();
+        rotateY(o.angle);
+        translate(o.dist, 0, 0);
+        sphere(this.size.x * 0.08);
+        pop();
+      }
+      pop();
+    } else {
+      specularMaterial(displayColor);
+      box(this.size.x, this.size.y, this.size.z);
     }
     pop();
   }
 }
 
-// --- PowerUp Class (No changes needed) ---
+// --- PowerUp Class ---
 class PowerUp {
   constructor(x, y, z, type) {
     this.pos = createVector(x, y, z);
     this.type = type;
-    this.size = createVector(15, 15, 15);
+    this.size = createVector(18, 18, 18);
     this.rotation = createVector(
       random(TWO_PI),
       random(TWO_PI),
@@ -886,41 +1000,49 @@ class PowerUp {
       random(0.01, 0.03),
       random(0.01, 0.03)
     );
+    this.corePulse = random(TWO_PI);
     switch (type) {
       case "HEALTH_PACK":
         this.color = color(120, 80, 90);
         this.shape = "box";
+        this.coreColor = color(120, 90, 100);
         break;
       case "SLOW_MO":
-        this.color = color(270, 80, 90);
+        this.color = color(200, 80, 90);
         this.shape = "sphere";
+        this.coreColor = color(200, 90, 100);
         break;
       case "MAX_HEALTH_UP":
         this.color = color(120, 75, 85);
-        this.borderColor = color(50, 90, 100);
         this.shape = "box_special";
+        this.coreColor = color(50, 90, 100);
         break;
       case "BOOST_FUEL":
-        this.color = color(200, 80, 100);
+        this.color = color(35, 80, 100);
         this.shape = "cone";
+        this.coreColor = color(35, 90, 100);
         break;
       case "MAX_WEAPON_ENERGY":
         this.color = color(180, 90, 90);
         this.shape = "torus";
+        this.coreColor = color(180, 100, 100);
         break;
       case "MISSILE_AMMO":
         this.color = color(0, 0, 85);
         this.shape = "cylinder";
+        this.coreColor = color(0, 0, 100);
         break;
       default:
         this.color = color(0, 0, 50);
         this.shape = "sphere";
+        this.coreColor = color(0, 0, 70);
     }
   }
   update(worldSpeed) {
     this.pos.z -= worldSpeed;
     let speedFactor = slowMoActive ? 0.5 : 1;
     this.rotation.add(p5.Vector.mult(this.rotSpeed, speedFactor));
+    this.corePulse += 0.1 * speedFactor;
   }
   draw() {
     push();
@@ -929,21 +1051,29 @@ class PowerUp {
     rotateY(this.rotation.y);
     rotateZ(this.rotation.z);
     noStroke();
-    specularMaterial(this.color);
-    shininess(20);
     let s = this.size.x;
+    let coreSize = s * (0.3 + sin(this.corePulse) * 0.1);
+    specularMaterial(this.color);
+    shininess(15);
     if (this.shape === "box") box(s);
     else if (this.shape === "sphere") sphere(s * 0.7);
     else if (this.shape === "cone") cone(s * 0.6, s * 1.2);
     else if (this.shape === "torus") torus(s * 0.5, s * 0.2);
     else if (this.shape === "cylinder") cylinder(s * 0.5, s * 1.1);
-    else if (this.shape === "box_special") {
-      box(s);
-      noFill();
-      stroke(this.borderColor);
-      strokeWeight(1);
-      box(s * 1.1);
-    } else sphere(s * 0.7);
+    else if (this.shape === "box_special") box(s * 0.9);
+    else sphere(s * 0.7);
+    push();
+    emissiveMaterial(this.coreColor);
+    if (this.shape === "box_special") {
+      box(s * 1.1, s * 0.2, s * 0.2);
+      box(s * 0.2, s * 1.1, s * 0.2);
+      box(s * 0.2, s * 0.2, s * 1.1);
+    } else if (this.shape !== "torus") {
+      sphere(coreSize);
+    } else {
+      torus(coreSize * 0.5, coreSize * 0.2);
+    }
+    pop();
     pop();
   }
   checkCollision(target) {
@@ -952,7 +1082,9 @@ class PowerUp {
       (this.pos.x - target.pos.x) ** 2 +
       (this.pos.y - target.pos.y) ** 2 +
       (this.pos.z - target.pos.z) ** 2;
-    let collisionThresholdSq = pow(this.size.x * 0.7 + target.size.x * 0.5, 2);
+    let r1 = this.size.x * 0.6;
+    let r2 = max(target.size.x, target.size.y) * 0.5;
+    let collisionThresholdSq = pow(r1 + r2, 2);
     return dSq < collisionThresholdSq;
   }
 }
@@ -963,23 +1095,19 @@ function setup() {
   setAttributes("antialias", true);
   smooth();
   colorMode(HSB, 360, 100, 100, 100);
-
   if (currentFont) {
     textFont(currentFont);
   } else {
     textFont("monospace");
   }
   textAlign(CENTER, CENTER);
-
   player = new Player();
   noiseDetail(8, 0.5);
-
   easycam = createEasyCam();
   easycam.setDistanceMin(50);
   easycam.setDistanceMax(TUNNEL_VISIBLE_LENGTH * 0.8);
   easycam.setZoomScale(0.02);
   easycamTarget = createVector(0, 0, 0);
-
   uiBuffer = createGraphics(windowWidth, windowHeight);
   uiBuffer.colorMode(HSB, 360, 100, 100, 100);
   if (currentFont) {
@@ -988,7 +1116,6 @@ function setup() {
     uiBuffer.textFont("monospace");
   }
   uiBuffer.textAlign(CENTER, CENTER);
-
   resetGame();
   window._setupCalled = true;
 }
@@ -1007,7 +1134,6 @@ function resetGame() {
   enemyProjectiles = [];
   powerUps = [];
   resetStreak();
-
   if (easycam && player && easycamTarget) {
     easycamTarget.set(
       player.pos.x,
@@ -1029,7 +1155,7 @@ function resetGame() {
 function initTunnel() {
   tunnel = [];
   let startZ = player ? player.pos.z : PLAYER_Z_OFFSET;
-  let effectiveStartZ = startZ - CAMERA_Z_OFFSET - TUNNEL_SEGMENT_LENGTH * 3; // Start further behind to ensure visibility
+  let effectiveStartZ = startZ - CAMERA_Z_OFFSET - TUNNEL_SEGMENT_LENGTH * 3;
   for (
     let z = effectiveStartZ;
     z < startZ + TUNNEL_VISIBLE_LENGTH;
@@ -1158,7 +1284,7 @@ function drawTunnel() {
   pop();
 }
 
-// --- Update World State (3D) --- (No changes needed)
+// --- Update World State (3D) ---
 function updateWorld() {
   if (!player) return;
   let effectiveSpeed =
@@ -1293,7 +1419,7 @@ function updateWorld() {
   noiseOffset += noiseSpeed * (effectiveSpeed / BASE_WORLD_SPEED_Z);
 }
 
-// --- Reset Streak --- (No changes needed)
+// --- Reset Streak ---
 function resetStreak() {
   streakCount = 0;
   streakMultiplier = 1.0;
@@ -1304,50 +1430,16 @@ function resetStreak() {
 
 // --- Draw All Game Elements (3D) ---
 function drawGameElements() {
-  ambientMaterial(100); // Apply a default material
-  push();
+  ambientMaterial(100);
   drawTunnel();
-  pop();
-  if (powerUps)
-    powerUps.forEach((pu) => {
-      if (pu) {
-        push();
-        pu.draw();
-        pop();
-      }
-    });
-  if (playerProjectiles)
-    playerProjectiles.forEach((p) => {
-      if (p) {
-        push();
-        p.draw();
-        pop();
-      }
-    });
-  if (enemyProjectiles)
-    enemyProjectiles.forEach((ep) => {
-      if (ep) {
-        push();
-        ep.draw();
-        pop();
-      }
-    });
-  if (enemies)
-    enemies.forEach((e) => {
-      if (e) {
-        push();
-        e.draw();
-        pop();
-      }
-    });
-  if (player) {
-    push();
-    player.draw();
-    pop();
-  }
+  if (powerUps) powerUps.forEach((pu) => pu?.draw());
+  if (playerProjectiles) playerProjectiles.forEach((p) => p?.draw());
+  if (enemyProjectiles) enemyProjectiles.forEach((ep) => ep?.draw());
+  if (enemies) enemies.forEach((e) => e?.draw());
+  if (player) player.draw();
 }
 
-// --- Draw UI onto Buffer --- (No changes needed)
+// --- Draw UI onto Buffer ---
 function drawUIBuffer() {
   if (currentFont) {
     uiBuffer.textFont(currentFont);
@@ -1560,12 +1652,169 @@ function drawUIBuffer() {
   uiBuffer.pop();
 }
 
+// --- Draw Reticule ---
+function drawReticule() {
+  push();
+  stroke(0, 0, 100, 70);
+  strokeWeight(1.5);
+  noFill();
+  let cx = width / 2;
+  let cy = height / 2;
+  let rSize = 15;
+  line(cx - rSize, cy, cx + rSize, cy);
+  line(cx, cy - rSize, cx, cy + rSize);
+  ellipse(cx, cy, rSize * 0.8);
+  pop();
+}
+
+// --- Draw Radar --- (Moved to bottom right, added rings)
+function drawRadar() {
+  if (!player) return;
+  let radarCenterX = width - RADAR_RADIUS - 20; // Position bottom right
+  let radarCenterY = height - RADAR_RADIUS - 20;
+
+  push();
+  translate(radarCenterX, radarCenterY); // Use calculated center
+
+  // Background and Border
+  fill(0, 0, 10, 60);
+  noStroke();
+  ellipse(0, 0, RADAR_RADIUS * 2);
+  stroke(0, 0, 60, 80);
+  strokeWeight(1);
+  noFill();
+  ellipse(0, 0, RADAR_RADIUS * 2);
+
+  // Concentric Rings
+  const numRings = 3;
+  stroke(0, 0, 50, 50);
+  for (let i = 1; i <= numRings; i++) {
+    ellipse(0, 0, (RADAR_RADIUS * 2 * i) / (numRings + 1));
+  }
+
+  // Player Marker (Center)
+  noStroke();
+  fill(0, 0, 100);
+  ellipse(0, 0, 6);
+
+  // Draw Enemies
+  fill(0, 80, 90);
+  noStroke();
+  if (enemies) {
+    enemies.forEach((e) => {
+      let relZ = e.pos.z - player.pos.z;
+      let radarY = (relZ / RADAR_RANGE_Z) * RADAR_RADIUS; // Z maps to Y
+      if (relZ > 0 && abs(radarY) < RADAR_RADIUS) {
+        let relX = e.pos.x - player.pos.x;
+        // Rotate relative X based on player roll for correct horizontal positioning on radar
+        let rotatedRelX =
+          relX * cos(-player.rollAngle) -
+          (e.pos.y - player.pos.y) * sin(-player.rollAngle);
+        let radarX = rotatedRelX * RADAR_SCALE_FACTOR;
+        let maxRadarX = sqrt(max(0, pow(RADAR_RADIUS, 2) - pow(radarY, 2)));
+        radarX = constrain(radarX, -maxRadarX, maxRadarX);
+        ellipse(radarX, radarY, 5);
+      }
+    });
+  }
+
+  // Draw Powerups
+  noStroke();
+  if (powerUps) {
+    powerUps.forEach((p) => {
+      let relZ = p.pos.z - player.pos.z;
+      let radarY = (relZ / RADAR_RANGE_Z) * RADAR_RADIUS;
+      if (relZ > 0 && abs(radarY) < RADAR_RADIUS) {
+        let relX = p.pos.x - player.pos.x;
+        let rotatedRelX =
+          relX * cos(-player.rollAngle) -
+          (p.pos.y - player.pos.y) * sin(-player.rollAngle);
+        let radarX = rotatedRelX * RADAR_SCALE_FACTOR;
+        let maxRadarX = sqrt(max(0, pow(RADAR_RADIUS, 2) - pow(radarY, 2)));
+        radarX = constrain(radarX, -maxRadarX, maxRadarX);
+        fill(p.color);
+        ellipse(radarX, radarY, 6);
+      }
+    });
+  }
+  pop();
+}
+
+// --- Draw Debug Info ---
+function drawDebugInfo() {
+  push();
+  fill(0, 0, 100, 90);
+  noStroke();
+  textAlign(LEFT, TOP);
+  textSize(12);
+  let x = 10;
+  /* Debug top left */ let y = 20;
+  let lh = 15;
+  text(`State: ${gameState}`, x, y);
+  y += lh;
+  if (player) {
+    text(
+      `Pos: ${player.pos.x.toFixed(1)}, ${player.pos.y.toFixed(
+        1
+      )}, ${player.pos.z.toFixed(1)}`,
+      x,
+      y
+    );
+    y += lh;
+    text(
+      `Vel: ${player.velocity.x.toFixed(1)}, ${player.velocity.y.toFixed(
+        1
+      )}, ${player.velocity.z.toFixed(1)}`,
+      x,
+      y
+    );
+    y += lh;
+    text(`Roll: ${degrees(player.rollAngle).toFixed(1)}°`, x, y);
+    y += lh;
+    text(
+      `Health: ${player.health.toFixed(1)} / ${player.maxHealth.toFixed(1)}`,
+      x,
+      y
+    );
+    y += lh;
+    text(
+      `Energy: ${player.weaponEnergy.toFixed(
+        1
+      )} / ${player.maxWeaponEnergy.toFixed(1)}`,
+      x,
+      y
+    );
+    y += lh;
+    text(
+      `Boost: ${player.boosterFuel.toFixed(
+        1
+      )} / ${player.maxBoosterFuel.toFixed(1)}`,
+      x,
+      y
+    );
+    y += lh;
+    text(`Missiles: ${player.missileAmmo}`, x, y);
+    y += lh;
+  }
+  text(`Score: ${score}`, x, y);
+  y += lh;
+  text(`Enemies: ${enemies.length}`, x, y);
+  y += lh;
+  text(`P-Proj: ${playerProjectiles.length}`, x, y);
+  y += lh;
+  text(`E-Proj: ${enemyProjectiles.length}`, x, y);
+  y += lh;
+  text(`Powerups: ${powerUps.length}`, x, y);
+  y += lh;
+  text(`FPS: ${frameRate().toFixed(1)}`, x, y);
+  y += lh;
+  pop();
+}
+
 // --- Draw Game State (3D with EasyCam) ---
 function drawGame() {
   try {
     background(5, 80, 5);
-
-    // Update EasyCam Target
     if (player && easycamTarget && easycam) {
       let targetX = player.pos.x;
       let targetY = player.pos.y - CAMERA_Y_OFFSET * 0.5;
@@ -1576,33 +1825,22 @@ function drawGame() {
       easycam.setState(currentState, 0);
     }
 
-    // Lighting for 3D scene
-    lights();
-    ambientLight(60);
-    directionalLight(200, 200, 200, 0.5, 0.8, -1);
-    if (easycamTarget)
-      pointLight(
-        0,
-        0,
-        100,
-        easycamTarget.x,
-        easycamTarget.y,
-        easycamTarget.z - 200
-      );
+    ambientLight(255, 255, 255); // <<< Only ambient light >>>
+    // Removed other light sources
 
-    // Game Updates
     if (player) player.update();
     updateWorld();
-
-    // Draw 3D Elements
-    drawGameElements();
+    drawGameElements(); // Draw 3D world
 
     // Draw 2D UI Overlay
     if (easycam) {
-      drawUIBuffer();
+      drawUIBuffer(); // Prepare buffer content
       easycam.beginHUD();
       noLights(); // Turn off lights for HUD
-      image(uiBuffer, 0, 0);
+      image(uiBuffer, 0, 0); // Draw game UI from buffer
+      drawReticule(); // Draw fixed reticule
+      drawRadar(); // Draw the radar minimap
+      drawDebugInfo(); // Conditionally draw debug info
       easycam.endHUD();
     }
   } catch (error) {
@@ -1611,12 +1849,10 @@ function drawGame() {
   }
 }
 
-// --- Draw Start Screen (EasyCam for Preview, HUD for UI) ---
+// --- Draw Start Screen ---
 function drawStartScreen() {
   background(200, 80, 30);
-  push(); // Isolate state
-
-  // Setup 3D Preview Camera
+  push();
   if (easycam) {
     let angleY = frameCount * 0.01;
     let rotationQuat = [0, sin(angleY / 2), 0, cos(angleY / 2)];
@@ -1627,73 +1863,67 @@ function drawStartScreen() {
     };
     easycam.setState(startCamState, 0);
   }
-
-  // Draw 3D Preview
-  lights();
+  ambientLight(255, 255, 255);
   if (player) player.draw(0, 75, 0);
-
-  // Draw 2D UI
   if (easycam) {
     easycam.beginHUD();
-    noLights(); // No lights for HUD
-    push(); // Isolate HUD drawing state
+    noLights();
+    push();
     fill(0, 0, 100);
     noStroke();
     textAlign(CENTER, CENTER);
-    // Font set globally
     textSize(48);
     text("TUNNEL RACER 3D", width / 2, height * 0.1);
     textSize(20);
     text("Dodge Walls, Enemies, & Lasers!", width / 2, height * 0.18);
     textSize(22);
-    let controlY = height * 0.5;
+    let controlY = height * 0.45;
     text("CONTROLS", width / 2, controlY);
     controlY += 35;
     textSize(16);
     textAlign(CENTER, CENTER);
-    text("A / Left Arrow : Steer Left", width / 2, controlY);
+    text("A/D or Left/Right: Steer Left/Right", width / 2, controlY);
     controlY += 25;
-    text("D / Right Arrow: Steer Right", width / 2, controlY);
+    text("W/S or Up/Down   : Move Up/Down", width / 2, controlY);
     controlY += 25;
-    text("Shift          : Boost", width / 2, controlY);
+    text("Q/E              : Roll Left/Right", width / 2, controlY);
     controlY += 25;
-    text("Spacebar       : Fire Laser", width / 2, controlY);
+    text("Shift            : Boost", width / 2, controlY);
     controlY += 25;
-    text("M              : Fire Missile", width / 2, controlY);
+    text("Spacebar         : Fire Laser", width / 2, controlY);
     controlY += 25;
-    text("Mouse Drag     : Rotate Camera", width / 2, controlY);
+    text("M                : Fire Missile", width / 2, controlY);
     controlY += 25;
-    text("Mouse Wheel    : Zoom Camera", width / 2, controlY);
+    text("Mouse Drag       : Rotate Camera", width / 2, controlY);
+    controlY += 25;
+    text("Mouse Wheel      : Zoom Camera", width / 2, controlY);
+    controlY += 25;
+    text("B                : Toggle Debug Info", width / 2, controlY);
     controlY += 35;
     textSize(16);
     text(
       "Earn points from score, then press 'U' after Game Over to upgrade!",
       width / 2,
-      height * 0.85
+      height * 0.9
     );
     textSize(24);
-    text("Press ENTER to Start", width / 2, height * 0.92);
-    pop(); // Restore HUD drawing state
+    text("Press ENTER to Start", width / 2, height * 0.95);
+    pop();
     easycam.endHUD();
   }
-  pop(); // Restore global state
+  pop();
 }
 
-// --- Draw Game Over Screen (Pure 2D using HUD) ---
+// --- Draw Game Over Screen ---
 function drawGameOverScreen() {
-  background(0, 90, 50); // Background covers full screen
-
+  background(0, 90, 50);
   if (easycam) {
-    easycam.beginHUD(); // Use HUD for consistency
-    noLights(); // No lights needed
-
-    push(); // Isolate drawing state
-    // Font set globally
+    easycam.beginHUD();
+    noLights();
+    push();
     fill(0, 0, 100);
     noStroke();
     textAlign(CENTER, CENTER);
-
-    // Draw text relative to top-left (0,0) in HUD space
     textSize(48);
     text("GAME OVER", width / 2, height * 0.2);
     textSize(32);
@@ -1710,11 +1940,9 @@ function drawGameOverScreen() {
     text("Press 'U' to Upgrade", width / 2, height * 0.75);
     textSize(24);
     text("Press ENTER to Restart", width / 2, height * 0.85);
-    pop(); // Restore drawing state
-
+    pop();
     easycam.endHUD();
   } else {
-    // Fallback if easycam isn't ready (shouldn't happen normally)
     push();
     fill(255, 0, 0);
     text("EasyCam not ready for Game Over", width / 2, height / 2);
@@ -1722,21 +1950,16 @@ function drawGameOverScreen() {
   }
 }
 
-// --- Draw Upgrade Screen (Pure 2D using HUD) ---
+// --- Draw Upgrade Screen ---
 function drawUpgradeScreen() {
-  background(240, 50, 20); // Background covers full screen
-
+  background(240, 50, 20);
   if (easycam) {
-    easycam.beginHUD(); // Use HUD for consistency
-    noLights(); // No lights needed
-
-    push(); // Isolate drawing state
-    // Font set globally
+    easycam.beginHUD();
+    noLights();
+    push();
     fill(0, 0, 100);
     noStroke();
     textAlign(CENTER, CENTER);
-
-    // Draw text/UI relative to top-left (0,0) in HUD space
     textSize(36);
     text("SHIP UPGRADES", width / 2, 50);
     textSize(24);
@@ -1749,7 +1972,6 @@ function drawUpgradeScreen() {
     let textX = startX + 20;
     let valueX = startX + colWidth * 0.45;
     let costX = startX + colWidth - 20;
-
     textAlign(LEFT, TOP);
     textSize(16);
     for (let i = 0; i < upgradeKeys.length; i++) {
@@ -1799,7 +2021,7 @@ function drawUpgradeScreen() {
         else fill(0, 80, 90);
         text(`Cost: ${upg.cost} pts`, costX, currentY);
       }
-      textAlign(LEFT, TOP); // Reset alignment
+      textAlign(LEFT, TOP);
     }
     textAlign(CENTER, CENTER);
     textSize(20);
@@ -1814,11 +2036,9 @@ function drawUpgradeScreen() {
       width / 2,
       height - 40
     );
-    pop(); // Restore drawing state
-
+    pop();
     easycam.endHUD();
   } else {
-    // Fallback if easycam isn't ready
     push();
     fill(255, 0, 0);
     text("EasyCam not ready for Upgrade Screen", width / 2, height / 2);
@@ -1826,14 +2046,13 @@ function drawUpgradeScreen() {
   }
 }
 
-// --- Draw Error Screen (Pure 2D using HUD) ---
+// --- Draw Error Screen ---
 function drawErrorScreen(errorMessage) {
   background(0, 100, 50);
   if (easycam) {
     easycam.beginHUD();
     noLights();
     push();
-    // Font set globally
     fill(0, 0, 100);
     noStroke();
     textAlign(CENTER, CENTER);
@@ -1855,7 +2074,6 @@ function drawErrorScreen(errorMessage) {
     pop();
     easycam.endHUD();
   } else {
-    // Fallback if easycam failed during setup
     push();
     fill(255, 0, 0);
     textSize(16);
@@ -1872,14 +2090,12 @@ function drawErrorScreen(errorMessage) {
 
 // --- Main Draw Loop ---
 function draw() {
-  // Set the font globally at the start of each frame
   if (currentFont) {
     textFont(currentFont);
   } else {
     textFont("monospace");
   }
-  textAlign(CENTER, CENTER); // Ensure default alignment
-
+  textAlign(CENTER, CENTER);
   try {
     switch (gameState) {
       case "START":
@@ -1898,7 +2114,6 @@ function draw() {
         drawErrorScreen("An error occurred.");
         break;
       default:
-        // Default case should also use HUD if easycam exists
         background(50);
         if (easycam) {
           easycam.beginHUD();
@@ -1921,10 +2136,17 @@ function draw() {
       console.error("Failed to draw error screen:", e2);
     }
   }
-} // End draw
+}
 
-// --- Input Handling --- (No changes needed)
+// --- Input Handling ---
 function keyPressed() {
+  if (key === "b" || key === "B") {
+    showDebug = !showDebug;
+    if (gameState === "UPGRADE") {
+      gameState = "START";
+      return;
+    }
+  }
   if (gameState === "PLAYING") {
     if (key === " ") {
       if (player) player.fireLaser();
@@ -1947,9 +2169,7 @@ function keyPressed() {
       gameState = "UPGRADE";
     }
   } else if (gameState === "UPGRADE") {
-    if (key === "b" || key === "B") {
-      gameState = "START";
-    } else if (keyCode === ENTER) {
+    if (keyCode === ENTER) {
       resetGame();
       gameState = "PLAYING";
     } else {
@@ -1974,15 +2194,21 @@ function keyPressed() {
   }
 }
 
-// --- Window Resize --- (No changes needed)
+// --- Window Resize ---
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight);
   if (uiBuffer) {
     uiBuffer.resizeGraphics(windowWidth, windowHeight);
-    uiBuffer.textFont(currentFont);
+    if (currentFont) {
+      uiBuffer.textFont(currentFont);
+    } else {
+      uiBuffer.textFont("monospace");
+    }
     uiBuffer.textAlign(CENTER, CENTER);
   }
   if (easycam) {
     easycam.setViewport([0, 0, windowWidth, windowHeight]);
   }
 }
+
+// --- No Final Catch Block ---
